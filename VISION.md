@@ -100,17 +100,32 @@ Utilisable tout de suite chez soi, partageable HACS ensuite sans réécrire.
 
 ---
 
-## 6. Décisions encore ouvertes (propositions à confirmer)
-- **D — Quand génère-t-on le planning ?** *Proposé :* à l'armement (pour ce
-  soir) + chaque nuit à minuit (pour le lendemain), **persisté** pour survivre à
-  un redémarrage de HA. Service `regenerate_schedule` pour re-tirer les aléas.
-- **E — Sémantique du switch.** *Proposé :* `switch.kevin` = ON/OFF manuel. Les
-  **dates de vacances** = bornes de la simulation + de la carte (hors période,
-  Kevin ne joue rien). Pas d'auto-désarmement à la date de fin en v1.
-- **F — Robustesse.** *Proposé :* extinction de sécurité systématique en fin de
-  nuit ; retour anticipé = OFF manuel → tout redevient normal (et régie
-  restaurée en v2) ; reboot HA en cours d'absence = on relit le planning
-  persisté.
+## 6. Comportement acté
+
+- **Pré-génération déterministe.** À l'armement, Kevin déroule **tout le séjour**
+  (mix de chaque jour + graine du jitter), le **persiste**, et ne rejoue ensuite
+  que ce plan figé. La carte lit ce plan → **ce que tu vois = ce qui arrivera**.
+  Survit à un reboot de HA (on relit le plan persisté).
+- **Aléatoire réel mais gelé.** Le hasard existe (pool, swing) mais est **tiré
+  une fois puis figé**. La variété « jamais deux soirs pareils » vient de la
+  diversité des mix + le swing, pas d'un tirage invisible chaque nuit.
+- **Plan de séjour = 2 couches.** Une **règle de base** (global / pool /
+  par-jour / roulement) remplit tout le séjour ; un **pinceau d'exceptions**
+  affecte un autre mix à des jours précis par-dessus. Un jour non peint retombe
+  sur la règle.
+- **Pinceau au niveau du jour (v1).** Une exception = un autre mix pour un jour.
+  Retoucher un seul clip d'un seul soir → **v2**.
+- **Re-tirage : 3 gestes.** « Re-tirer ce jour », « re-tirer tout le séjour »,
+  et (v2) « verrouiller un jour ». Exposé via `regenerate_schedule` + boutons
+  carte. Par défaut : armer = générer une fois, puis plus rien ne bouge seul.
+- **Sémantique du switch.** `switch.kevin` = ON/OFF manuel. Les **dates de
+  vacances** = bornes de la simu + de la carte (hors période, Kevin ne joue
+  rien). Pas d'auto-désarmement en v1.
+- **Dates = bornes, on ne touche pas au passé.** Étendre la fin → nouveaux jours
+  remplis par la règle de base ; les jours déjà générés ne bougent pas.
+  Raccourcir / rentrer plus tôt = OFF, jours au-delà ignorés.
+- **Robustesse.** Extinction de sécurité systématique en fin de nuit ; retour
+  anticipé = OFF → tout redevient normal (régie restaurée en v2).
 
 ---
 
@@ -126,3 +141,7 @@ Utilisable tout de suite chez soi, partageable HACS ensuite sans réécrire.
   sur les jours, macro). Les 4 modes = cas particuliers du plan.
 - **Couche soleil** : **plage de transition** premier↔dernier jour (couleur
   intermédiaire), pas un simple trait.
+- **Génération** : plan de séjour **pré-généré à l'armement, déterministe,
+  persisté** (carte = vérité, survit au reboot). Hasard réel mais gelé.
+- **Plan de séjour** : règle de base + pinceau d'exceptions (au niveau du jour
+  en v1). **Switch** manuel ; dates = bornes.
