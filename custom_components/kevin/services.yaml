@@ -1,0 +1,13 @@
+# Services exposed by House Agent Kevin.
+
+start:
+  name: Start
+  description: Arm the presence simulation and generate today's schedule.
+
+stop:
+  name: Stop
+  description: Disarm the presence simulation and cancel pending events.
+
+regenerate_schedule:
+  name: Regenerate schedule
+  description: Re-roll the random jitter and regenerate the schedule for the current day.
