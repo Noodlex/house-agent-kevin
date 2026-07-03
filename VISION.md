@@ -39,11 +39,27 @@ l'illusion tient toute l'année.
 
 ---
 
-## 2. Les 4 modes = façons de choisir le mix du soir
-1. **Global quotidien** — un seul mix, rejoué chaque soir (+ swing).
-2. **Pool aléatoire** — plusieurs mixes, tirage au sort chaque soir.
-3. **Défini par jour** — mix assigné par jour de la semaine.
-4. **Roulement de N jours** — cycle A → B → C (→ D), puis reboucle.
+## 2. Deux étages : le mix (soirée) et le plan de séjour
+
+Le modèle a **deux niveaux** :
+
+- 🎵 **Micro — un mix** = la soirée arrangée (pistes/clips/one-shots). Cf. §1.
+- 🗓️ **Macro — le plan de séjour** = comment on **répartit les mix sur les
+  jours** de vacances : des **blocs de longueur libre** (Mix A pendant 3 jours,
+  puis Mix B pendant 5 jours, puis Mix C pendant 2 jours…), ou des affectations
+  sur des jours précis.
+
+Les « 4 modes » historiques ne sont plus que des **façons de remplir ce plan** :
+| Mode | = plan de séjour |
+|---|---|
+| Global quotidien | un seul bloc couvrant tout le séjour |
+| Pool aléatoire | chaque jour = un mix tiré au sort dans un pool |
+| Défini par jour | affectation par jour de la semaine |
+| Roulement de N jours | blocs de N jours qui se répètent (A→B→C→…) |
+
+Le plan de séjour généralise tout ça : blocs de durée quelconque + surcharges
+par jour. La carte l'affiche comme un **bandeau** colorié (1 couleur = 1 mix),
+cliquable pour naviguer jour par jour.
 
 ---
 
@@ -65,8 +81,13 @@ La frise turquoise/grise **devient l'éditeur** :
 - pistes **turquoise** = pilotées par Kevin · pistes **grises** = « déjà
   automatisé » (référence, affichées pour composer en contexte) ;
 - on pose / tire les clips à la souris, contour pointillé = fenêtre ± ;
-- **couche soleil** en fond (jour clair / nuit sombre, marqueurs lever/coucher)
-  pour la date affichée ;
+- **couche soleil** en fond, en **plage de transition sur tout le séjour** :
+  on affiche le coucher (et le lever) du **premier** et du **dernier** jour, et
+  la zone entre les deux est colorée en teinte intermédiaire (« ça bascule ici
+  selon la date »). Le marqueur du jour affiché glisse dans cette bande. Jour =
+  clair, nuit = sombre, transition = intermédiaire ;
+- deux timelines : un **bandeau macro** (plan de séjour, mix par jour) au-dessus,
+  et la **frise micro** (la soirée du jour) en dessous ;
 - **navigateur de dates** entre les 2 dates de vacances → prévisualise quel mix
   passe et à quelle heure réelle, avec le soleil du jour.
 
@@ -101,3 +122,7 @@ Utilisable tout de suite chez soi, partageable HACS ensuite sans réécrire.
 - **Ancrage** : **absolu OU soleil, au choix par bord de clip**.
 - **Régie** (suspend/restore autos + composants) : retenue, planifiée **v2**.
 - **Carte** : éditeur intégré au **même repo** (`www/`).
+- **Deux étages** : mix (soirée, micro) + **plan de séjour** (répartition des mix
+  sur les jours, macro). Les 4 modes = cas particuliers du plan.
+- **Couche soleil** : **plage de transition** premier↔dernier jour (couleur
+  intermédiaire), pas un simple trait.
