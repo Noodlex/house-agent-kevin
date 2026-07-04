@@ -1,0 +1,31 @@
+{
+  "mixes": {
+    "soiree_a": {
+      "id": "soiree_a",
+      "name": "Soirée A",
+      "jitter_default": 20,
+      "clips": [
+        { "entity_id": "light.cuisine", "start": { "type": "sun", "event": "sunset", "offset": -15 }, "end": { "type": "sun", "event": "sunset", "offset": 75 } },
+        { "entity_id": "light.plan_de_travail", "start": { "type": "sun", "event": "sunset", "offset": -15 }, "end": { "type": "sun", "event": "sunset", "offset": 60 } },
+        { "entity_id": "light.salle_a_manger", "start": { "type": "sun", "event": "sunset", "offset": 30 }, "end": { "type": "sun", "event": "sunset", "offset": 150 } },
+        { "entity_id": "light.salon", "start": { "type": "fixed", "time": "19:45" }, "end": { "type": "sun", "event": "sunset", "offset": 95 } },
+        { "entity_id": "light.lampadaire", "start": { "type": "sun", "event": "sunset", "offset": 45 }, "end": { "type": "sun", "event": "sunset", "offset": 210 } },
+        { "entity_id": "light.lumiere_tv", "start": { "type": "sun", "event": "sunset", "offset": 60 }, "end": { "type": "sun", "event": "sunset", "offset": 180 } },
+        { "entity_id": "media_player.tv_airplay", "start": { "type": "sun", "event": "sunset", "offset": 60 }, "end": { "type": "sun", "event": "sunset", "offset": 180 } },
+        { "entity_id": "switch.prise_chacon_1", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:00" }, "jitter": 10 },
+        { "entity_id": "switch.nous_7", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:00" }, "jitter": 10 },
+        { "entity_id": "switch.nous_8", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:00" }, "jitter": 10 }
+      ],
+      "oneshots": [
+        { "entity_id": "script.annonce_google_home", "at": { "type": "sun", "event": "sunset", "offset": 90 }, "jitter": 30, "service": "script.turn_on" }
+      ]
+    }
+  },
+  "sejour": {
+    "start_date": "2026-07-20",
+    "end_date": "2026-07-29",
+    "rule": { "mode": "global", "mix": "soiree_a" },
+    "overrides": {}
+  },
+  "safety_off": "01:00"
+}

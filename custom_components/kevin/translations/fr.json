@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "House Agent Kevin",
+        "description": "Armez la simulation de présence. Le preset de référence est chargé pour démarrer ; vous pourrez ajuster les mix et le plan de séjour plus tard."
+      }
+    },
+    "abort": {
+      "already_configured": "House Agent Kevin est déjà configuré."
+    }
+  }
+}

@@ -22,3 +22,6 @@ Thumbs.db
 # Home Assistant local test config
 config/
 *.log
+
+__pycache__/
+*.pyc

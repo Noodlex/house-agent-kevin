@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "House Agent Kevin",
+        "description": "Arm the presence simulation. The reference preset is loaded to get you started; you can tune the mixes and the séjour plan later."
+      }
+    },
+    "abort": {
+      "already_configured": "House Agent Kevin is already set up."
+    }
+  }
+}
