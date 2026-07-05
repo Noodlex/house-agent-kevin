@@ -18,7 +18,7 @@ _pkg = types.ModuleType("kevin_pure")
 _pkg.__path__ = [_BASE]
 sys.modules["kevin_pure"] = _pkg
 
-for _name in ("const", "models", "sun", "generator"):
+for _name in ("const", "models", "sun", "generator", "preset"):
     _spec = importlib.util.spec_from_file_location(f"kevin_pure.{_name}", os.path.join(_BASE, f"{_name}.py"))
     _mod = importlib.util.module_from_spec(_spec)
     sys.modules[f"kevin_pure.{_name}"] = _mod

@@ -9,5 +9,20 @@
     "abort": {
       "already_configured": "House Agent Kevin is already set up."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "House Agent Kevin — settings",
+        "data": {
+          "start_date": "Holiday start",
+          "end_date": "Holiday end",
+          "mode": "Planning mode",
+          "rotation_length": "Rotation block length (days)",
+          "safety_off": "Safety off time",
+          "jitter": "Swing (± minutes)"
+        }
+      }
+    }
   }
 }

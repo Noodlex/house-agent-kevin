@@ -9,7 +9,6 @@ See VISION.md and docs/MVP-PLAN.md in the repo.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 
@@ -26,10 +25,9 @@ from .const import (
 )
 from .coordinator import KevinCoordinator
 from .models import KevinConfig
+from .preset import load_preset
 
 _LOGGER = logging.getLogger(__name__)
-
-_PRESET_PATH = os.path.join(os.path.dirname(__file__), "presets", "reference.json")
 
 _CARD_FILE = "house-agent-kevin-card.js"
 _CARD_PATH = os.path.join(os.path.dirname(__file__), "frontend", _CARD_FILE)
@@ -37,14 +35,9 @@ _CARD_URL = f"/{DOMAIN}_static/{_CARD_FILE}"
 _FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
 
 
-def _load_preset() -> dict:
-    with open(_PRESET_PATH, encoding="utf-8") as fp:
-        return json.load(fp)
-
-
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up House Agent Kevin from a config entry."""
-    raw = entry.options.get("config") or await hass.async_add_executor_job(_load_preset)
+    raw = entry.options.get("config") or await hass.async_add_executor_job(load_preset)
     config = KevinConfig.from_dict(raw)
 
     coordinator = KevinCoordinator(hass, entry, config)
