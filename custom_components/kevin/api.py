@@ -26,23 +26,30 @@ def async_register(hass: HomeAssistant) -> None:
         return
     hass.data[_WS_REGISTERED] = True
     websocket_api.async_register_command(hass, ws_get_plan)
+    websocket_api.async_register_command(hass, ws_set_override)
+
+
+def _first_coordinator(hass: HomeAssistant):
+    for coordinator in hass.data.get(DOMAIN, {}).values():
+        if hasattr(coordinator, "async_get_or_preview_plan"):
+            return coordinator
+    return None
 
 
 @websocket_api.websocket_command({vol.Required("type"): "kevin/get_plan"})
 @websocket_api.async_response
 async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
     """Return the current (or preview) plan with per-day sun times."""
-    coordinators = list(hass.data.get(DOMAIN, {}).values())
-    coordinators = [c for c in coordinators if hasattr(c, "async_get_or_preview_plan")]
-    if not coordinators:
+    coordinator = _first_coordinator(hass)
+    if coordinator is None:
         connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
         return
 
-    coordinator = coordinators[0]
     plan = await coordinator.async_get_or_preview_plan()
     location = coordinator.location()
     mixes = coordinator.config.mixes
     reference = coordinator.config.reference
+    overrides = coordinator.config.sejour.overrides
 
     def _build() -> list[dict]:
         days: list[dict] = []
@@ -59,6 +66,7 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
                     "sunset": times["sunset"].isoformat(),
                     "events": [e.to_dict() for e in day_plan.events],
                     "reference": resolve_reference(reference, day, location),
+                    "overridden": date_iso in overrides,
                 }
             )
         return days
@@ -75,3 +83,21 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
             "days": days,
         },
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "kevin/set_override",
+        vol.Required("date"): str,
+        vol.Optional("mix"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def ws_set_override(hass: HomeAssistant, connection, msg: dict) -> None:
+    """Paint (or clear) the mix for a specific day."""
+    coordinator = _first_coordinator(hass)
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
+        return
+    await coordinator.async_set_override(msg["date"], msg.get("mix"))
+    connection.send_result(msg["id"], {"ok": True})

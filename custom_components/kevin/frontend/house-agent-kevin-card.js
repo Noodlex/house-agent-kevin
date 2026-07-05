@@ -240,6 +240,9 @@ class HouseAgentKevinCard extends HTMLElement {
     const p = parseLocal(day.date);
     const dateLabel = `${p.date.slice(8)}/${p.date.slice(5, 7)}`;
     const armed = this._data.armed;
+    const mixOpts = ['<option value="__auto__">Auto (règle)</option>']
+      .concat(Object.keys(this._data.mixes).map((id) => `<option value="${id}">${this._data.mixes[id].name}</option>`))
+      .join("");
 
     this._root().innerHTML = `
       <style>
@@ -254,6 +257,8 @@ class HouseAgentKevinCard extends HTMLElement {
         .dsel { text-align:center; min-width:120px; font-size:12px; }
         .dsel b { color:var(--primary-text-color); }
         .mix { font-size:11px; color:var(--secondary-text-color); }
+        .paint { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
+        .paint select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
         .macro { margin:10px 0; }
         .blocks { display:flex; gap:3px; margin-bottom:3px; }
         .blk { border-radius:5px; padding:3px 4px; font-size:11px; font-weight:600; color:#fff; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -279,6 +284,7 @@ class HouseAgentKevinCard extends HTMLElement {
             <button class="btn" id="regen" title="Re-tirer les aléas">⟳</button>
           </div>
         </div>
+        <div class="paint"><i class="mdi mdi-brush"></i>Mix du ${dateLabel} :<select id="mixpick">${mixOpts}</select><span>pinceau</span></div>
         <div class="macro">${this._macro()}</div>
         ${this._svg(day)}
         <div class="legend">
@@ -297,6 +303,17 @@ class HouseAgentKevinCard extends HTMLElement {
     root.querySelectorAll(".day").forEach((btn) => {
       btn.onclick = () => { this._selected = +btn.dataset.i; this._render(); };
     });
+    const pick = root.getElementById("mixpick");
+    pick.value = day.overridden ? day.mix : "__auto__";
+    pick.onchange = async (ev) => {
+      const v = ev.target.value;
+      await this._hass.connection.sendMessagePromise({
+        type: "kevin/set_override",
+        date: day.date,
+        mix: v === "__auto__" ? null : v,
+      });
+      await this._load();
+    };
   }
 }
 

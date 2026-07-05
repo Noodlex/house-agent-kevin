@@ -44,6 +44,7 @@ class KevinCoordinator:
         self.armed = False
         self.plan: Plan | None = None
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.plan")
+        self._overrides_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.overrides")
         self._regie_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.regie")
         self._regie_snapshot: dict | None = None
         self._events: list[ScheduledEvent] = []
@@ -60,6 +61,9 @@ class KevinCoordinator:
             except (KeyError, ValueError) as err:  # corrupt / old format
                 _LOGGER.warning("Ignoring unreadable persisted plan: %s", err)
                 self.plan = None
+        overrides = await self._overrides_store.async_load()
+        if overrides:
+            self.config.sejour.overrides.update(overrides)
         self._regie_snapshot = await self._regie_store.async_load()
 
     def _location(self) -> Location:
@@ -70,8 +74,8 @@ class KevinCoordinator:
             elevation=self.hass.config.elevation,
         )
 
-    async def _generate(self) -> None:
-        seed = random.randint(1, 2**31 - 1)
+    async def _generate(self, keep_seed: bool = False) -> None:
+        seed = self.plan.seed if (keep_seed and self.plan is not None) else random.randint(1, 2**31 - 1)
         now = dt_util.now()
         self.plan = await self.hass.async_add_executor_job(
             generate_plan, self.config, self._location(), seed, now
@@ -109,6 +113,22 @@ class KevinCoordinator:
             return
         await self._generate()
         self._reschedule()
+        self._notify()
+
+    async def async_set_override(self, day_iso: str, mix_id: str | None) -> None:
+        """Paint a day with a specific mix (or clear it back to the rule)."""
+        overrides = self.config.sejour.overrides
+        if mix_id:
+            overrides[day_iso] = mix_id
+        else:
+            overrides.pop(day_iso, None)
+        await self._overrides_store.async_save(overrides)
+        if self.armed:
+            # Keep the seed so only the painted day changes, not everyone's swing.
+            await self._generate(keep_seed=True)
+            self._reschedule()
+        else:
+            self.plan = None  # force a fresh preview on the next fetch
         self._notify()
 
     def location(self) -> Location:
