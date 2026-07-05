@@ -42,13 +42,25 @@ packaging. See [VISION.md](VISION.md) and [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation
 
-_HACS instructions will come once packaged. For now: copy
-`custom_components/kevin/` into your HA `config/custom_components/`, restart, add
-the **House Agent Kevin** integration, then drop a `custom:house-agent-kevin-card`
-on a dashboard (the card auto-loads — no manual resource needed)._
+### Via HACS (custom repository)
+
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Noodlex&repository=house-agent-kevin&category=integration)
+
+1. HACS → ⋮ (top right) → **Custom repositories**.
+2. Repository: `https://github.com/Noodlex/house-agent-kevin` — Category: **Integration** → **Add**.
+3. Find **House Agent Kevin** in HACS → **Download**.
+4. **Restart Home Assistant.**
+5. **Settings → Devices & Services → Add Integration → House Agent Kevin.**
+6. Drop a `custom:house-agent-kevin-card` on a dashboard (the card auto-loads —
+   no manual Lovelace resource needed).
+
+### Manual
+
+Copy `custom_components/kevin/` into your HA `config/custom_components/`, restart,
+then follow steps 5–6 above.
 
 The bundled preset targets a reference house; tune the entities, mixes and
-holiday dates to your own home.
+holiday dates to your own home (via the options UI or `presets/reference.json`).
 
 ## Why not just "Presence Simulation"?
 

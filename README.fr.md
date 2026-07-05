@@ -46,14 +46,26 @@ l'UI, et packaging HACS. Voir [VISION.md](VISION.md) et [docs/MVP-PLAN.md](docs/
 
 ## Installation
 
-_Les instructions HACS viendront une fois le packaging fait. Pour l'instant :
-copiez `custom_components/kevin/` dans votre `config/custom_components/`,
-redémarrez, ajoutez l'intégration **House Agent Kevin**, puis déposez une carte
-`custom:house-agent-kevin-card` sur un tableau de bord (elle se charge toute seule
-— pas de ressource à déclarer)._
+### Via HACS (dépôt personnalisé)
+
+[![Ouvrir dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Noodlex&repository=house-agent-kevin&category=integration)
+
+1. HACS → ⋮ (en haut à droite) → **Dépôts personnalisés**.
+2. Dépôt : `https://github.com/Noodlex/house-agent-kevin` — Catégorie : **Intégration** → **Ajouter**.
+3. Cherchez **House Agent Kevin** dans HACS → **Télécharger**.
+4. **Redémarrez Home Assistant.**
+5. **Paramètres → Appareils et services → Ajouter l'intégration → House Agent Kevin.**
+6. Déposez une carte `custom:house-agent-kevin-card` sur un tableau de bord (elle
+   se charge toute seule — aucune ressource Lovelace à déclarer).
+
+### Manuelle
+
+Copiez `custom_components/kevin/` dans votre `config/custom_components/`,
+redémarrez, puis suivez les étapes 5–6 ci-dessus.
 
 Le preset livré cible une maison de référence ; ajustez les entités, les mix et
-les dates de vacances à votre propre logement.
+les dates de vacances à votre logement (via l'UI d'options ou
+`presets/reference.json`).
 
 ## Pourquoi pas simplement « Presence Simulation » ?
 
