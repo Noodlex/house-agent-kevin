@@ -16,6 +16,7 @@ import os
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 
+from . import api
 from .const import (
     DOMAIN,
     PLATFORMS,
@@ -29,6 +30,11 @@ from .models import KevinConfig
 _LOGGER = logging.getLogger(__name__)
 
 _PRESET_PATH = os.path.join(os.path.dirname(__file__), "presets", "reference.json")
+
+_CARD_FILE = "house-agent-kevin-card.js"
+_CARD_PATH = os.path.join(os.path.dirname(__file__), "frontend", _CARD_FILE)
+_CARD_URL = f"/{DOMAIN}_static/{_CARD_FILE}"
+_FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
 
 
 def _load_preset() -> dict:
@@ -48,8 +54,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _register_services(hass)
+    api.async_register(hass)
+    await _register_frontend(hass)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
+
+
+async def _register_frontend(hass: HomeAssistant) -> None:
+    """Serve the Lovelace card and load it, once, tolerant to HA API changes."""
+    if hass.data.get(_FRONTEND_REGISTERED):
+        return
+    hass.data[_FRONTEND_REGISTERED] = True
+    try:
+        from homeassistant.components.http import StaticPathConfig
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_CARD_URL, _CARD_PATH, cache_headers=False)]
+        )
+    except ImportError:  # older HA
+        hass.http.register_static_path(_CARD_URL, _CARD_PATH, cache_headers=False)
+
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, _CARD_URL)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Could not auto-load the Kevin card (%s); add it as a resource manually", err)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

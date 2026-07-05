@@ -1,7 +1,18 @@
 # Lovelace card (frontend)
 
-The `house-agent-kevin-card` lives here: a Lit + SVG Gantt-style timeline that
-shows simulated light windows (dashed outline = random ±jitter window) over a
-day/night sun layer, with a date navigator across the holiday range.
+The card now lives inside the integration at
+[`custom_components/kevin/frontend/house-agent-kevin-card.js`](../custom_components/kevin/frontend/house-agent-kevin-card.js)
+and is **auto-served + auto-loaded** by the integration (no manual Lovelace
+resource needed). Add it to a dashboard with:
 
-🚧 Not built yet — see the repo roadmap.
+```yaml
+type: custom:house-agent-kevin-card
+```
+
+It fetches the generated plan over the WebSocket API (`kevin/get_plan`) and
+renders the two-timeline previewer: the **séjour** plan (macro, colored by mix)
+above, the **evening** mix (micro) below, on the **sun transition layer** (day /
+transition / night), with day-by-day navigation, an arm toggle and a regenerate
+button.
+
+🚧 v1 is a **read-only previewer**. Drag-to-edit clips comes in a later phase.

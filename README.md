@@ -20,9 +20,21 @@ Point Kevin at your lights (and a few decoy plugs), flip one master switch befor
 - **Services** — `kevin.start`, `kevin.stop`, `kevin.regenerate_schedule`.
 - **Lovelace card** (Lit + SVG) — Gantt-style timeline of simulated light windows (dashed = random window) over a day/night sun layer, with a date navigator across your holiday range.
 
+## Status update
+
+MVP backend is implemented (master switch, deterministic pre-generated +
+persisted plan, sun anchoring, swing, safety-off, sensors, services) and the
+**Lovelace preview card** ships with it (auto-loaded). Only the `global` séjour
+mode is wired so far; advanced modes, drag-to-edit and the "régie" (suspend /
+restore automations & valves) come next. See [VISION.md](VISION.md) and
+[docs/MVP-PLAN.md](docs/MVP-PLAN.md).
+
 ## Installation
 
-_HACS installation instructions will be added once the MVP is ready._
+_HACS installation instructions will be added once the MVP is ready. For now,
+copy `custom_components/kevin/` into your HA `config/custom_components/`, restart,
+then add the **House Agent Kevin** integration and drop a
+`custom:house-agent-kevin-card` on a dashboard._
 
 ## Why not just "Presence Simulation"?
 

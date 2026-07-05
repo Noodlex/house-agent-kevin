@@ -98,6 +98,21 @@ class KevinCoordinator:
         self._reschedule()
         self._notify()
 
+    def location(self) -> Location:
+        """Public accessor (used by the WebSocket API)."""
+        return self._location()
+
+    async def async_get_or_preview_plan(self) -> Plan:
+        """Return the persisted plan, or a transient deterministic preview.
+
+        Lets the card show the upcoming séjour even before Kevin is armed.
+        """
+        if self.plan is not None:
+            return self.plan
+        return await self.hass.async_add_executor_job(
+            generate_plan, self.config, self._location(), 0, dt_util.now()
+        )
+
     # -- scheduling -------------------------------------------------------- #
     @callback
     def _cancel(self) -> None:
