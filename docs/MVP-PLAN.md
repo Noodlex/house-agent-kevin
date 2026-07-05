@@ -17,12 +17,20 @@ de [VISION.md](../VISION.md). Le frontend (carte) et la régie viennent après.
 - Config par **preset** (JSON livré, la maison de référence) + config_flow minimal.
 - **Persistance** (survit au reboot HA).
 
-🕓 Reporté (phases suivantes) :
-- Modes pool / par-jour / roulement + **plan de séjour** (bandeau macro) et pinceau.
-- **Carte** Lovelace (éditeur + couche soleil).
-- **Régie** (suspendre/restaurer automatisations et composants, vannes).
-- config_flow/options UI complet (édition des mix depuis l'UI).
-- Pinceau au niveau du clip, verrouillage de jours.
+✅ Livré depuis (pistes A–E) :
+- Modes pool / par-jour / roulement (blocs de N jours) + **plan de séjour**.
+- **Carte** Lovelace (prévisualiseur : macro + micro + couche soleil).
+- **Régie** (suspendre/restaurer automatisations + composants via scène) — off par défaut.
+- **Options UI** (dates, mode, longueur, jitter, extinction).
+- **Pinceau au niveau du jour** depuis la carte (`kevin/set_override`).
+- Pistes de référence grises (volets/store).
+
+🕓 Reste à faire :
+- **Édition par glisser** des clips depuis la carte (déplacer un bord).
+- Édition des **mix** depuis l'UI (pas seulement le JSON du preset).
+- Pinceau au niveau du **clip**, verrouillage de jours au re-tirage.
+- Durcissement de la régie sur reboot (restauration des composants).
+- Packaging HACS (validation, publication).
 
 > Le **modèle de données** ci-dessous est conçu complet dès le MVP (il porte déjà
 > plan de séjour, modes, overrides), mais seul le chemin « global » est câblé en

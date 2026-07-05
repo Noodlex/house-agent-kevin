@@ -22,12 +22,16 @@ Point Kevin at your lights (and a few decoy plugs), flip one master switch befor
 
 ## Status update
 
-MVP backend is implemented (master switch, deterministic pre-generated +
-persisted plan, sun anchoring, swing, safety-off, sensors, services) and the
-**Lovelace preview card** ships with it (auto-loaded). Only the `global` séjour
-mode is wired so far; advanced modes, drag-to-edit and the "régie" (suspend /
-restore automations & valves) come next. See [VISION.md](VISION.md) and
-[docs/MVP-PLAN.md](docs/MVP-PLAN.md).
+Backend + card are functional. Implemented: master switch; deterministic
+pre-generated + persisted plan; sun anchoring; swing; safety-off; sensors;
+services; the four planning modes (global / pool / weekday / N-day rotation) with
+a **séjour plan**; grey **reference tracks**; the **régie** (away mode:
+suspend/restore automations & components, off by default); an **options UI**; and
+the **Lovelace card** (auto-loaded) with day-by-day preview, the sun transition
+layer, and a **day-level pinceau** to paint a mix onto a day.
+
+Still to do: drag-to-edit clips on the card, editing mixes from the UI, and HACS
+packaging. See [VISION.md](VISION.md) and [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation
 
