@@ -19,13 +19,43 @@
       "oneshots": [
         { "entity_id": "script.annonce_google_home", "at": { "type": "sun", "event": "sunset", "offset": 90 }, "jitter": 30, "service": "script.turn_on" }
       ]
+    },
+    "soiree_b": {
+      "id": "soiree_b",
+      "name": "Soirée B (sobre)",
+      "jitter_default": 25,
+      "clips": [
+        { "entity_id": "light.cuisine", "start": { "type": "sun", "event": "sunset", "offset": 0 }, "end": { "type": "sun", "event": "sunset", "offset": 60 } },
+        { "entity_id": "light.salon", "start": { "type": "sun", "event": "sunset", "offset": 20 }, "end": { "type": "sun", "event": "sunset", "offset": 150 } },
+        { "entity_id": "light.lampadaire", "start": { "type": "sun", "event": "sunset", "offset": 30 }, "end": { "type": "sun", "event": "sunset", "offset": 165 } },
+        { "entity_id": "switch.prise_chacon_1", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:00" }, "jitter": 10 },
+        { "entity_id": "switch.nous_7", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:00" }, "jitter": 10 }
+      ],
+      "oneshots": []
+    },
+    "week_end_c": {
+      "id": "week_end_c",
+      "name": "Week-end (tardif)",
+      "jitter_default": 25,
+      "clips": [
+        { "entity_id": "light.cuisine", "start": { "type": "sun", "event": "sunset", "offset": -15 }, "end": { "type": "sun", "event": "sunset", "offset": 90 } },
+        { "entity_id": "light.salle_a_manger", "start": { "type": "sun", "event": "sunset", "offset": 45 }, "end": { "type": "sun", "event": "sunset", "offset": 210 } },
+        { "entity_id": "light.salon", "start": { "type": "sun", "event": "sunset", "offset": 60 }, "end": { "type": "fixed", "time": "00:30" } },
+        { "entity_id": "light.lampadaire", "start": { "type": "sun", "event": "sunset", "offset": 60 }, "end": { "type": "fixed", "time": "00:15" } },
+        { "entity_id": "light.lumiere_tv", "start": { "type": "sun", "event": "sunset", "offset": 75 }, "end": { "type": "fixed", "time": "00:20" } },
+        { "entity_id": "media_player.tv_airplay", "start": { "type": "sun", "event": "sunset", "offset": 75 }, "end": { "type": "fixed", "time": "00:20" } },
+        { "entity_id": "switch.prise_chacon_1", "start": { "type": "sun", "event": "sunset", "offset": -30 }, "end": { "type": "fixed", "time": "23:30" }, "jitter": 10 }
+      ],
+      "oneshots": [
+        { "entity_id": "script.annonce_google_home", "at": { "type": "sun", "event": "sunset", "offset": 120 }, "jitter": 30, "service": "script.turn_on" }
+      ]
     }
   },
   "sejour": {
     "start_date": "2026-07-20",
     "end_date": "2026-07-29",
-    "rule": { "mode": "global", "mix": "soiree_a" },
-    "overrides": {}
+    "rule": { "mode": "rotation", "mixes": ["soiree_a", "soiree_b"], "length": 3 },
+    "overrides": { "2026-07-25": "week_end_c" }
   },
   "safety_off": "01:00"
 }

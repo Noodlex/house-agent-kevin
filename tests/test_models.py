@@ -14,10 +14,11 @@ def test_preset_roundtrips():
 
 def test_preset_shape():
     config = models.KevinConfig.from_dict(preset_dict())
-    assert "soiree_a" in config.mixes
+    assert {"soiree_a", "soiree_b", "week_end_c"} <= set(config.mixes)
     assert config.safety_off == time(1, 0)
-    assert config.sejour.rule.mode == "global"
-    assert config.sejour.rule.mix == "soiree_a"
+    assert config.sejour.rule.mode == "rotation"
+    assert config.sejour.rule.mixes == ["soiree_a", "soiree_b"]
+    assert config.sejour.overrides.get("2026-07-25") == "week_end_c"
 
 
 def test_controlled_entities_collects_all():

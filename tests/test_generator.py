@@ -62,6 +62,40 @@ def test_jitter_within_bounds():
 
 def test_mix_for_day_respects_override():
     config = _config()
-    config.sejour.overrides = {"2026-07-22": "soiree_a"}
-    assert mix_for_day(config.sejour, date(2026, 7, 22), 2) == "soiree_a"
-    assert mix_for_day(config.sejour, date(2026, 7, 20), 0) == "soiree_a"
+    config.sejour.overrides = {"2026-07-22": "week_end_c"}
+    assert mix_for_day(config.sejour, date(2026, 7, 22), 2) == "week_end_c"
+
+
+def test_rotation_blocks_by_length():
+    config = _config()
+    sejour = config.sejour
+    sejour.overrides = {}
+    # rule = rotation over [soiree_a, soiree_b], length 3 -> AAA BBB AAA ...
+    got = [mix_for_day(sejour, date(2026, 7, 20), i) for i in range(7)]
+    assert got == ["soiree_a"] * 3 + ["soiree_b"] * 3 + ["soiree_a"]
+
+
+def test_pool_is_seed_deterministic_and_seed_sensitive():
+    config = _config()
+    config.sejour.rule = models.Rule.from_dict({"mode": "pool", "mixes": ["soiree_a", "soiree_b", "week_end_c"]})
+    config.sejour.overrides = {}
+    day = date(2026, 7, 22)
+    assert mix_for_day(config.sejour, day, 2, 111) == mix_for_day(config.sejour, day, 2, 111)
+    picks = {mix_for_day(config.sejour, day, 2, s) for s in range(30)}
+    assert len(picks) > 1  # different seeds do reach different mixes
+
+
+def test_weekday_mode():
+    config = _config()
+    config.sejour.rule = models.Rule.from_dict(
+        {"mode": "weekday", "map": {"mon": "soiree_a", "sat": "week_end_c", "sun": "week_end_c"}, "mix": "soiree_b"}
+    )
+    config.sejour.overrides = {}
+    assert mix_for_day(config.sejour, date(2026, 7, 25), 5) == "week_end_c"  # Saturday
+    assert mix_for_day(config.sejour, date(2026, 7, 20), 0) == "soiree_a"    # Monday
+
+
+def test_override_lands_in_generated_plan():
+    config = _config()
+    plan = generate_plan(config, PARIS, 5, NOW)
+    assert plan.days["2026-07-25"].mix == "week_end_c"

@@ -50,7 +50,7 @@ def _jitter(dt: datetime, minutes: int, seed: int) -> datetime:
     return dt + timedelta(minutes=round(rng.uniform(-minutes, minutes)))
 
 
-def mix_for_day(sejour: Sejour, day: date, index: int) -> str:
+def mix_for_day(sejour: Sejour, day: date, index: int, global_seed: int = 0) -> str:
     """Resolve which mix plays on `day` (overrides win over the base rule)."""
     override = sejour.overrides.get(day.isoformat())
     if override:
@@ -64,11 +64,14 @@ def mix_for_day(sejour: Sejour, day: date, index: int) -> str:
     if rule.mode == MODE_ROTATION:
         if not rule.mixes:
             return rule.mix
-        return rule.mixes[index % len(rule.mixes)]
+        # Blocks of `length` days per mix, then cycle: A A A B B B C C C ...
+        block = max(1, rule.length)
+        return rule.mixes[(index // block) % len(rule.mixes)]
     if rule.mode == MODE_POOL:
         if not rule.mixes:
             return rule.mix
-        rng = random.Random(_seed_for(0, day, "pool"))
+        # Tied to the plan seed so "re-roll the whole séjour" changes the draw.
+        rng = random.Random(_seed_for(global_seed, day, "pool"))
         return rng.choice(rule.mixes)
     return rule.mix
 
@@ -129,7 +132,7 @@ def generate_plan(config: KevinConfig, location: Location, global_seed: int, now
     """Pre-generate the whole séjour into a persisted Plan."""
     days: dict[str, DayPlan] = {}
     for index, day in enumerate(config.sejour.dates()):
-        mix_id = mix_for_day(config.sejour, day, index)
+        mix_id = mix_for_day(config.sejour, day, index, global_seed)
         mix = config.mixes.get(mix_id)
         if mix is None:
             continue
