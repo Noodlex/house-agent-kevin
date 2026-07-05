@@ -154,6 +154,60 @@ class Mix:
 
 
 # --------------------------------------------------------------------------- #
+# Reference tracks (grey — displayed, not controlled)                          #
+# --------------------------------------------------------------------------- #
+@dataclass
+class ReferenceClip:
+    start: Anchor
+    end: Anchor
+    label: str = ""
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ReferenceClip":
+        return cls(start=Anchor.from_dict(d["start"]), end=Anchor.from_dict(d["end"]), label=d.get("label", ""))
+
+    def to_dict(self) -> dict:
+        return {"start": self.start.to_dict(), "end": self.end.to_dict(), "label": self.label}
+
+
+@dataclass
+class ReferencePoint:
+    at: Anchor
+    label: str = ""
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ReferencePoint":
+        return cls(at=Anchor.from_dict(d["at"]), label=d.get("label", ""))
+
+    def to_dict(self) -> dict:
+        return {"at": self.at.to_dict(), "label": self.label}
+
+
+@dataclass
+class ReferenceTrack:
+    """An informational row (already automated elsewhere): volets, store…"""
+
+    name: str
+    clips: list[ReferenceClip] = field(default_factory=list)
+    points: list[ReferencePoint] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "ReferenceTrack":
+        return cls(
+            name=d["name"],
+            clips=[ReferenceClip.from_dict(c) for c in d.get("clips", [])],
+            points=[ReferencePoint.from_dict(p) for p in d.get("points", [])],
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "clips": [c.to_dict() for c in self.clips],
+            "points": [p.to_dict() for p in self.points],
+        }
+
+
+# --------------------------------------------------------------------------- #
 # Séjour plan (macro)                                                          #
 # --------------------------------------------------------------------------- #
 @dataclass
@@ -264,6 +318,7 @@ class KevinConfig:
     sejour: Sejour
     safety_off: time = field(default_factory=lambda: _parse_time(DEFAULT_SAFETY_OFF))
     regie: Regie = field(default_factory=Regie)
+    reference: list[ReferenceTrack] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict) -> "KevinConfig":
@@ -272,6 +327,7 @@ class KevinConfig:
             sejour=Sejour.from_dict(d["sejour"]),
             safety_off=_parse_time(d.get("safety_off", DEFAULT_SAFETY_OFF)),
             regie=Regie.from_dict(d.get("regie", {})),
+            reference=[ReferenceTrack.from_dict(t) for t in d.get("reference", [])],
         )
 
     def to_dict(self) -> dict:
@@ -280,6 +336,7 @@ class KevinConfig:
             "sejour": self.sejour.to_dict(),
             "safety_off": _fmt_time(self.safety_off),
             "regie": self.regie.to_dict(),
+            "reference": [t.to_dict() for t in self.reference],
         }
 
     def controlled_entities(self) -> set[str]:

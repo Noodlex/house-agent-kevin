@@ -28,6 +28,7 @@ from .models import (
     KevinConfig,
     Mix,
     Plan,
+    ReferenceTrack,
     ScheduledEvent,
     Sejour,
 )
@@ -126,6 +127,25 @@ def generate_day(
 
     events.sort(key=lambda e: e.t)
     return events
+
+
+def resolve_reference(tracks: list[ReferenceTrack], day: date, location: Location) -> list[dict]:
+    """Resolve reference (grey) tracks to concrete times for a day — no jitter."""
+    out: list[dict] = []
+    for track in tracks:
+        clips = []
+        for clip in track.clips:
+            start = resolve_anchor(clip.start, day, location)
+            end = resolve_anchor(clip.end, day, location)
+            if end <= start:
+                end += timedelta(days=1)
+            clips.append({"start": start.isoformat(), "end": end.isoformat(), "label": clip.label})
+        points = [
+            {"at": resolve_anchor(point.at, day, location).isoformat(), "label": point.label}
+            for point in track.points
+        ]
+        out.append({"name": track.name, "clips": clips, "points": points})
+    return out
 
 
 def generate_plan(config: KevinConfig, location: Location, global_seed: int, now: datetime) -> Plan:

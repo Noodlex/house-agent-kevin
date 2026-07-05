@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from conftest import preset_dict
 from kevin_pure import models
-from kevin_pure.generator import generate_day, generate_plan, mix_for_day
+from kevin_pure.generator import generate_day, generate_plan, mix_for_day, resolve_reference
 from kevin_pure.sun import Location
 
 PARIS = Location(latitude=48.8566, longitude=2.3522, time_zone="Europe/Paris", elevation=35.0)
@@ -99,3 +99,13 @@ def test_override_lands_in_generated_plan():
     config = _config()
     plan = generate_plan(config, PARIS, 5, NOW)
     assert plan.days["2026-07-25"].mix == "week_end_c"
+
+
+def test_resolve_reference_points():
+    config = _config()
+    ref = resolve_reference(config.reference, date(2026, 7, 20), PARIS)
+    names = [t["name"] for t in ref]
+    assert "Volets" in names and "Store" in names
+    volets = next(t for t in ref if t["name"] == "Volets")
+    assert len(volets["points"]) == 2
+    assert volets["points"][0]["at"][11:16] == "20:30"  # fixed local time

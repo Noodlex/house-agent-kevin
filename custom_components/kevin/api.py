@@ -14,6 +14,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
+from .generator import resolve_reference
 from .sun import sun_times
 
 _WS_REGISTERED = f"{DOMAIN}_ws_registered"
@@ -41,11 +42,13 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
     plan = await coordinator.async_get_or_preview_plan()
     location = coordinator.location()
     mixes = coordinator.config.mixes
+    reference = coordinator.config.reference
 
     def _build() -> list[dict]:
         days: list[dict] = []
         for date_iso, day_plan in sorted(plan.days.items()):
-            times = sun_times(location, date.fromisoformat(date_iso))
+            day = date.fromisoformat(date_iso)
+            times = sun_times(location, day)
             mix = mixes.get(day_plan.mix)
             days.append(
                 {
@@ -55,6 +58,7 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
                     "sunrise": times["sunrise"].isoformat(),
                     "sunset": times["sunset"].isoformat(),
                     "events": [e.to_dict() for e in day_plan.events],
+                    "reference": resolve_reference(reference, day, location),
                 }
             )
         return days

@@ -57,5 +57,20 @@
     "rule": { "mode": "rotation", "mixes": ["soiree_a", "soiree_b"], "length": 3 },
     "overrides": { "2026-07-25": "week_end_c" }
   },
+  "reference": [
+    {
+      "name": "Volets",
+      "points": [
+        { "at": { "type": "fixed", "time": "20:30" }, "label": "enfants" },
+        { "at": { "type": "fixed", "time": "22:30" }, "label": "parents" }
+      ]
+    },
+    {
+      "name": "Store",
+      "points": [
+        { "at": { "type": "fixed", "time": "22:00" }, "label": "ferme" }
+      ]
+    }
+  ],
   "safety_off": "01:00"
 }

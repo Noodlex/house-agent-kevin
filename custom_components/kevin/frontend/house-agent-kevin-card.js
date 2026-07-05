@@ -123,10 +123,12 @@ class HouseAgentKevinCard extends HTMLElement {
   }
 
   _svg(day) {
-    const tracks = this._buildTracks(day);
+    const kev = this._buildTracks(day);
+    const ref = day.reference || [];
     const y0 = 30;
     const rowH = 24;
-    const bottom = y0 + tracks.length * rowH;
+    const nRows = ref.length + kev.length;
+    const bottom = y0 + nRows * rowH;
     const H = bottom + 44;
     const safety = day.events.find((e) => e.action === "safety_off");
     const safetyEnd = safety ? safety.t : null;
@@ -163,9 +165,33 @@ class HouseAgentKevinCard extends HTMLElement {
       const sx = this._xForIso(safetyEnd, day.date);
       parts.push(`<line x1="${sx}" y1="22" x2="${sx}" y2="${bottom}" stroke="var(--secondary-text-color,#888)" stroke-dasharray="2 3"/>`);
     }
-    // tracks
-    tracks.forEach((tr, i) => {
-      const cy = y0 + i * rowH + 12;
+    // reference rows (grey — already automated, not controlled by Kevin)
+    let row = 0;
+    ref.forEach((tr) => {
+      const cy = y0 + row * rowH + 12;
+      row += 1;
+      parts.push(`<text x="8" y="${cy + 4}" class="tm">${tr.name}</text>`);
+      for (const c of tr.clips) {
+        const x1 = this._xForIso(c.start, day.date);
+        const x2 = this._xForIso(c.end, day.date);
+        const w = Math.max(3, x2 - x1);
+        parts.push(`<rect x="${x1}" y="${cy - 8}" width="${w}" height="16" rx="3" fill="#94a3b8" fill-opacity="0.30" stroke="#94a3b8" stroke-dasharray="4 3"/>`);
+        if (c.label) parts.push(`<text x="${x1 + 4}" y="${cy + 4}" class="tm">${c.label}</text>`);
+      }
+      for (const p of tr.points) {
+        const x = this._xForIso(p.at, day.date);
+        parts.push(`<polygon points="${x},${cy - 6} ${x + 6},${cy} ${x},${cy + 6} ${x - 6},${cy}" fill="none" stroke="#94a3b8"/>`);
+        if (p.label) parts.push(`<text x="${x + 9}" y="${cy + 4}" class="tm">${p.label}</text>`);
+      }
+    });
+    if (ref.length) {
+      const sepY = y0 + ref.length * rowH;
+      parts.push(`<line x1="8" y1="${sepY}" x2="${RIGHT}" y2="${sepY}" stroke="var(--divider-color,#ccc)" stroke-dasharray="2 3"/>`);
+    }
+    // Kevin rows (turquoise — controlled)
+    kev.forEach((tr) => {
+      const cy = y0 + row * rowH + 12;
+      row += 1;
       parts.push(`<text x="8" y="${cy + 4}" class="tl">${this._friendly(tr.eid)}</text>`);
       for (const [start, end] of tr.intervals) {
         const x1 = this._xForIso(start, day.date);
