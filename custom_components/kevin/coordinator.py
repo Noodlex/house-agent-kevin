@@ -22,6 +22,7 @@ from .const import (
     STORAGE_KEY,
     STORAGE_VERSION,
 )
+from . import regie as regie_mod
 from .generator import generate_plan
 from .models import KevinConfig, Plan, ScheduledEvent
 from .sun import Location
@@ -43,6 +44,8 @@ class KevinCoordinator:
         self.armed = False
         self.plan: Plan | None = None
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.plan")
+        self._regie_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.regie")
+        self._regie_snapshot: dict | None = None
         self._events: list[ScheduledEvent] = []
         self._idx: int | None = None
         self._unsub = None
@@ -57,6 +60,7 @@ class KevinCoordinator:
             except (KeyError, ValueError) as err:  # corrupt / old format
                 _LOGGER.warning("Ignoring unreadable persisted plan: %s", err)
                 self.plan = None
+        self._regie_snapshot = await self._regie_store.async_load()
 
     def _location(self) -> Location:
         return Location(
@@ -83,11 +87,20 @@ class KevinCoordinator:
             await self._generate()
         self._reschedule()
         await self._apply_current_state()
+        # Régie: enter away mode on a fresh arm only (never on a reboot resume,
+        # which would snapshot the already-away state as the restore baseline).
+        if regenerate and self._regie_snapshot is None and not self.config.regie.is_empty():
+            self._regie_snapshot = await regie_mod.async_apply(self.hass, self.config.regie)
+            await self._regie_store.async_save(self._regie_snapshot)
         self._notify()
 
     async def async_disarm(self) -> None:
         self.armed = False
         self._cancel()
+        if self._regie_snapshot is not None:
+            await regie_mod.async_restore(self.hass, self._regie_snapshot)
+            self._regie_snapshot = None
+            await self._regie_store.async_save(None)
         self._notify()
 
     async def async_regenerate(self) -> None:

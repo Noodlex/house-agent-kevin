@@ -224,12 +224,46 @@ class Sejour:
 
 
 @dataclass
+class Regie:
+    """"Away mode": automations to suspend + components to snapshot & switch.
+
+    On arm Kevin records the automations' on/off state and turns them off, takes
+    a scene snapshot of `snapshot_entities`, then runs `away_actions`. On disarm
+    it restores the automations and replays the snapshot scene. Everything is
+    reversible.
+    """
+
+    suspend_automations: list[str] = field(default_factory=list)
+    snapshot_entities: list[str] = field(default_factory=list)
+    away_actions: list[dict] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Regie":
+        return cls(
+            suspend_automations=list(d.get("suspend_automations", [])),
+            snapshot_entities=list(d.get("snapshot_entities", [])),
+            away_actions=list(d.get("away_actions", [])),
+        )
+
+    def to_dict(self) -> dict:
+        return {
+            "suspend_automations": self.suspend_automations,
+            "snapshot_entities": self.snapshot_entities,
+            "away_actions": self.away_actions,
+        }
+
+    def is_empty(self) -> bool:
+        return not (self.suspend_automations or self.snapshot_entities or self.away_actions)
+
+
+@dataclass
 class KevinConfig:
     """The whole configuration: the mix library + the séjour plan + safety."""
 
     mixes: dict[str, Mix]
     sejour: Sejour
     safety_off: time = field(default_factory=lambda: _parse_time(DEFAULT_SAFETY_OFF))
+    regie: Regie = field(default_factory=Regie)
 
     @classmethod
     def from_dict(cls, d: dict) -> "KevinConfig":
@@ -237,6 +271,7 @@ class KevinConfig:
             mixes={k: Mix.from_dict(v) for k, v in d.get("mixes", {}).items()},
             sejour=Sejour.from_dict(d["sejour"]),
             safety_off=_parse_time(d.get("safety_off", DEFAULT_SAFETY_OFF)),
+            regie=Regie.from_dict(d.get("regie", {})),
         )
 
     def to_dict(self) -> dict:
@@ -244,6 +279,7 @@ class KevinConfig:
             "mixes": {k: v.to_dict() for k, v in self.mixes.items()},
             "sejour": self.sejour.to_dict(),
             "safety_off": _fmt_time(self.safety_off),
+            "regie": self.regie.to_dict(),
         }
 
     def controlled_entities(self) -> set[str]:
