@@ -100,7 +100,9 @@ def generate_day(
             _seed_for(global_seed, day, f"{clip.entity_id}|end"),
         )
         if end <= start:
-            end = start + timedelta(minutes=1)
+            # A fixed end past midnight (e.g. "00:30") resolves to the same day,
+            # landing before the evening start — roll it to the next day.
+            end += timedelta(days=1)
         events.append(ScheduledEvent(t=start, entity_id=clip.entity_id, action=ACTION_ON))
         events.append(ScheduledEvent(t=end, entity_id=clip.entity_id, action=ACTION_OFF))
 

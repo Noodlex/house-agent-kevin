@@ -101,6 +101,18 @@ def test_override_lands_in_generated_plan():
     assert plan.days["2026-07-25"].mix == "week_end_c"
 
 
+def test_fixed_end_past_midnight_rolls_to_next_day():
+    # week_end_c has a salon clip ending at fixed 00:30 -> must span hours, not 1 min.
+    config = _config()
+    mix = config.mixes["week_end_c"]
+    day = date(2026, 7, 25)
+    events = generate_day(mix, day, PARIS, 3, config.safety_off)
+    salon_on = next(e.t for e in events if e.entity_id == "light.salon" and e.action == "on")
+    salon_off = next(e.t for e in events if e.entity_id == "light.salon" and e.action == "off")
+    assert (salon_off - salon_on).total_seconds() > 60 * 60  # more than an hour
+    assert salon_off.date() > day  # actually crosses midnight
+
+
 def test_resolve_reference_points():
     config = _config()
     ref = resolve_reference(config.reference, date(2026, 7, 20), PARIS)
