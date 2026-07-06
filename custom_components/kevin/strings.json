@@ -3,8 +3,20 @@
     "step": {
       "user": {
         "title": "House Agent Kevin",
-        "description": "Arm the presence simulation. The reference preset is loaded to get you started; you can tune the mixes and the séjour plan later."
+        "description": "Pick the entities Kevin should control and your holiday dates. A starter evening \"mix\" is built automatically — you can fine-tune it later.",
+        "data": {
+          "entities": "Entities to control (lights, plugs, media, scripts)",
+          "start_date": "Holiday start",
+          "end_date": "Holiday end",
+          "mode": "Planning mode",
+          "rotation_length": "Rotation block length (days)",
+          "jitter": "Swing (± minutes)",
+          "safety_off": "Safety off time"
+        }
       }
+    },
+    "error": {
+      "no_entities": "Pick at least one entity for Kevin to control."
     },
     "abort": {
       "already_configured": "House Agent Kevin is already set up."
@@ -14,13 +26,15 @@
     "step": {
       "init": {
         "title": "House Agent Kevin — settings",
+        "description": "Re-tune the plan. Changing the entities rebuilds the starter mix.",
         "data": {
+          "entities": "Entities to control",
           "start_date": "Holiday start",
           "end_date": "Holiday end",
           "mode": "Planning mode",
           "rotation_length": "Rotation block length (days)",
-          "safety_off": "Safety off time",
-          "jitter": "Swing (± minutes)"
+          "jitter": "Swing (± minutes)",
+          "safety_off": "Safety off time"
         }
       }
     }

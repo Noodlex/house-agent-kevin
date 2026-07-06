@@ -37,7 +37,11 @@ _FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up House Agent Kevin from a config entry."""
-    raw = entry.options.get("config") or await hass.async_add_executor_job(load_preset)
+    raw = (
+        entry.options.get("config")
+        or entry.data.get("config")
+        or await hass.async_add_executor_job(load_preset)
+    )
     config = KevinConfig.from_dict(raw)
 
     coordinator = KevinCoordinator(hass, entry, config)

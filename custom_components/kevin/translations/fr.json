@@ -3,8 +3,20 @@
     "step": {
       "user": {
         "title": "House Agent Kevin",
-        "description": "Armez la simulation de présence. Le preset de référence est chargé pour démarrer ; vous pourrez ajuster les mix et le plan de séjour plus tard."
+        "description": "Choisissez les entités que Kevin doit piloter et vos dates de vacances. Un « mix » de soirée est construit automatiquement — vous pourrez l'affiner ensuite.",
+        "data": {
+          "entities": "Entités à piloter (lumières, prises, média, scripts)",
+          "start_date": "Début du séjour",
+          "end_date": "Fin du séjour",
+          "mode": "Mode de planification",
+          "rotation_length": "Longueur d'un bloc de roulement (jours)",
+          "jitter": "Swing (± minutes)",
+          "safety_off": "Heure d'extinction de sécurité"
+        }
       }
+    },
+    "error": {
+      "no_entities": "Choisissez au moins une entité pour Kevin."
     },
     "abort": {
       "already_configured": "House Agent Kevin est déjà configuré."
@@ -14,13 +26,15 @@
     "step": {
       "init": {
         "title": "House Agent Kevin — réglages",
+        "description": "Réajustez le plan. Changer les entités reconstruit le mix de départ.",
         "data": {
+          "entities": "Entités à piloter",
           "start_date": "Début du séjour",
           "end_date": "Fin du séjour",
           "mode": "Mode de planification",
           "rotation_length": "Longueur d'un bloc de roulement (jours)",
-          "safety_off": "Heure d'extinction de sécurité",
-          "jitter": "Swing (± minutes)"
+          "jitter": "Swing (± minutes)",
+          "safety_off": "Heure d'extinction de sécurité"
         }
       }
     }
