@@ -107,6 +107,79 @@ class HouseAgentKevinCard extends HTMLElement {
     this._root().innerHTML = `<ha-card header="House Agent Kevin"><div style="padding:16px;color:var(--error-color,#c00)">${msg}</div></ha-card>`;
   }
 
+  // ---- edit mode -------------------------------------------------------- //
+
+  _mixId(day) {
+    return day.mix;
+  }
+
+  _clips(day) {
+    const mix = this._config.mixes[this._mixId(day)];
+    return mix ? mix.clips : [];
+  }
+
+  /** Anchor -> minutes since local midnight of `day` (may exceed 1440). */
+  _anchorMins(anchor, day) {
+    if (anchor.type === "sun") {
+      const p = parseLocal(anchor.event === "sunrise" ? day.sunrise : day.sunset);
+      return p.h * 60 + p.min + (anchor.offset || 0);
+    }
+    const [h, m] = String(anchor.time).split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  /** Move an anchor to `mins`, preserving whether it is fixed or sun-anchored. */
+  _setAnchor(anchor, mins, day) {
+    if (anchor.type === "sun") {
+      const p = parseLocal(anchor.event === "sunrise" ? day.sunrise : day.sunset);
+      anchor.offset = Math.round(mins - (p.h * 60 + p.min));
+    } else {
+      const m = ((Math.round(mins) % 1440) + 1440) % 1440;
+      anchor.time = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    }
+  }
+
+  async _enterEdit() {
+    const res = await this._hass.connection.sendMessagePromise({ type: "kevin/get_config" });
+    this._config = res.config;
+    this._edit = true;
+    this._dirty = false;
+    this._render();
+  }
+
+  async _exitEdit(save) {
+    if (save && this._dirty) {
+      await this._hass.connection.sendMessagePromise({
+        type: "kevin/update_config",
+        config: this._config,
+      });
+    }
+    this._edit = false;
+    this._config = null;
+    await this._load();
+  }
+
+  _addTrack(entityId, day) {
+    if (!entityId) return;
+    const mix = this._config.mixes[this._mixId(day)];
+    if (!mix || mix.clips.some((c) => c.entity_id === entityId)) return;
+    mix.clips.push({
+      entity_id: entityId,
+      start: { type: "sun", event: "sunset", offset: 0 },
+      end: { type: "sun", event: "sunset", offset: 120 },
+    });
+    this._dirty = true;
+    this._render();
+  }
+
+  _removeTrack(entityId, day) {
+    const mix = this._config.mixes[this._mixId(day)];
+    if (!mix) return;
+    mix.clips = mix.clips.filter((c) => c.entity_id !== entityId);
+    this._dirty = true;
+    this._render();
+  }
+
   async _regenerate() {
     if (!this._data || !this._data.armed) return;
     await this._hass.callService("kevin", "regenerate_schedule");
@@ -260,6 +333,99 @@ class HouseAgentKevinCard extends HTMLElement {
     return parts.join("");
   }
 
+  /** Edit view: the mix's *nominal* clips (no swing), with drag handles. */
+  _svgEdit(day) {
+    const clips = this._clips(day);
+    const W = this._innerWidth();
+    this._lastWidth = W;
+    const narrow = W < 620;
+    this._L = narrow ? 96 : 150;
+    this._R = W - 8;
+    const labelChars = narrow ? 10 : 16;
+    const y0 = TOP;
+    const bottom = y0 + Math.max(1, clips.length) * ROW_H;
+    const H = bottom + 34;
+
+    const sunX = this._xForMin(this._anchorMins({ type: "sun", event: "sunset", offset: 0 }, day));
+    const parts = [];
+    parts.push(`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" style="display:block;touch-action:none">`);
+    parts.push(`<rect x="${this._L}" y="22" width="${sunX - this._L}" height="${bottom - 22}" fill="#facc15" fill-opacity="0.10"/>`);
+    parts.push(`<rect x="${sunX}" y="22" width="${this._R - sunX}" height="${bottom - 22}" fill="#1e3a8a" fill-opacity="0.18"/>`);
+    const step = W < 520 ? 3 : W < 760 ? 2 : 1;
+    for (let h = 16; h <= 26; h++) {
+      const x = this._xForMin(h * 60);
+      parts.push(`<line x1="${x}" y1="22" x2="${x}" y2="${bottom}" stroke="var(--divider-color,#ddd)" stroke-opacity="0.5"/>`);
+      if ((h - 16) % step === 0) parts.push(`<text x="${x}" y="14" text-anchor="middle" class="tm">${h % 24}h</text>`);
+    }
+    parts.push(`<line x1="${sunX}" y1="22" x2="${sunX}" y2="${bottom}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 3"/>`);
+
+    clips.forEach((clip, i) => {
+      const cy = y0 + i * ROW_H + 12;
+      let s = this._anchorMins(clip.start, day);
+      let e = this._anchorMins(clip.end, day);
+      if (e <= s) e += 1440;
+      const x1 = this._xForMin(s);
+      const x2 = this._xForMin(e);
+      const w = Math.max(6, x2 - x1);
+      const full = this._friendly(clip.entity_id);
+      parts.push(`<text x="6" y="${cy + 4}" class="tl">${esc(truncate(full, labelChars))}</text>`);
+      parts.push(`<text x="${this._L - 14}" y="${cy + 4}" class="rm" data-rm="${esc(clip.entity_id)}">✕</text>`);
+      parts.push(`<rect class="clip" data-ci="${i}" data-edge="body" x="${x1}" y="${cy - 8}" width="${w}" height="16" rx="3" fill="#14b8a6" fill-opacity="0.85"/>`);
+      parts.push(`<rect class="hnd" data-ci="${i}" data-edge="start" x="${x1 - 4}" y="${cy - 9}" width="8" height="18" rx="2" fill="#0f766e"/>`);
+      parts.push(`<rect class="hnd" data-ci="${i}" data-edge="end" x="${x2 - 4}" y="${cy - 9}" width="8" height="18" rx="2" fill="#0f766e"/>`);
+      const tag = clip.start.type === "sun" ? "☀" : "🕑";
+      parts.push(`<text x="${x1 + 6}" y="${cy + 4}" class="tm" fill="#083344">${tag}</text>`);
+    });
+    if (!clips.length) {
+      parts.push(`<text x="${this._L}" y="${y0 + 16}" class="tm">Aucune piste — ajoute une entité ci-dessous.</text>`);
+    }
+    parts.push(`</svg>`);
+    return parts.join("");
+  }
+
+  _bindDrag(root, day) {
+    const pxPerMin = (this._R - this._L) / SPAN_MIN;
+    const clips = this._clips(day);
+
+    const onDown = (ev) => {
+      const ci = +ev.currentTarget.dataset.ci;
+      const edge = ev.currentTarget.dataset.edge;
+      const clip = clips[ci];
+      if (!clip) return;
+      ev.preventDefault();
+      const startX = ev.clientX;
+      const s0 = this._anchorMins(clip.start, day);
+      let e0 = this._anchorMins(clip.end, day);
+      if (e0 <= s0) e0 += 1440;
+
+      const onMove = (m) => {
+        const d = Math.round((m.clientX - startX) / pxPerMin / 5) * 5;
+        if (!d && !this._dirty) return;
+        if (edge === "body") {
+          this._setAnchor(clip.start, s0 + d, day);
+          this._setAnchor(clip.end, e0 + d, day);
+        } else if (edge === "start") {
+          this._setAnchor(clip.start, Math.min(s0 + d, e0 - 5), day);
+        } else {
+          this._setAnchor(clip.end, Math.max(e0 + d, s0 + 5), day);
+        }
+        this._dirty = true;
+        this._refreshEditSvg(day);
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    };
+
+    root.querySelectorAll(".clip, .hnd").forEach((el) => el.addEventListener("pointerdown", onDown));
+    root.querySelectorAll(".rm").forEach((el) => {
+      el.addEventListener("click", () => this._removeTrack(el.dataset.rm, day));
+    });
+  }
+
   _macro() {
     const days = this._data.days;
     // runs of consecutive same-mix days => blocks
@@ -282,12 +448,75 @@ class HouseAgentKevinCard extends HTMLElement {
     return `<div class="blocks">${blockHtml}</div><div class="days">${dayHtml}</div>`;
   }
 
+  _refreshEditSvg(day) {
+    const wrap = this._root().getElementById("svgwrap");
+    if (!wrap) return;
+    wrap.innerHTML = this._svgEdit(day);
+    this._bindDrag(wrap, day);
+  }
+
+  _renderEdit(day) {
+    const root = this._root();
+    const mix = this._config.mixes[this._mixId(day)];
+    root.innerHTML = `
+      <style>
+        ha-card { padding: 12px 14px; }
+        .head { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+        .title { font-weight:600; color:var(--primary-text-color); }
+        .btn { cursor:pointer; border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:8px; height:32px; padding:0 12px; font-size:13px; }
+        .btn.primary { background:#14b8a6; border-color:#14b8a6; color:#fff; font-weight:600; }
+        .hint { font-size:11px; color:var(--secondary-text-color); margin:6px 0 4px; }
+        .add { display:flex; align-items:center; gap:10px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
+        .add span:last-child { flex:1; }
+        text.tl { fill: var(--primary-text-color); font: 12px var(--paper-font-body1_-_font-family, sans-serif); }
+        text.tm { fill: var(--secondary-text-color); font: 11px var(--paper-font-body1_-_font-family, sans-serif); }
+        text.rm { fill: var(--error-color, #c0392b); font: 13px sans-serif; cursor:pointer; }
+        rect.clip { cursor: grab; }
+        rect.hnd { cursor: ew-resize; }
+      </style>
+      <ha-card>
+        <div class="head">
+          <div class="title">✎ Édition — ${esc(mix ? mix.name : day.mix)}</div>
+          <div>
+            <button class="btn" id="cancel">Annuler</button>
+            <button class="btn primary" id="save">Enregistrer</button>
+          </div>
+        </div>
+        <div class="hint">
+          Glisse le corps d'un clip pour le déplacer, ses poignées pour changer début/fin (aimanté à 5 min).
+          ✕ retire la piste. ☀ = bord ancré au soleil (c'est le décalage qui bouge) · 🕑 = heure fixe.
+        </div>
+        <div id="svgwrap">${this._svgEdit(day)}</div>
+        <div class="add"><span>Ajouter une piste :</span><span id="pickwrap"></span></div>
+      </ha-card>`;
+
+    root.getElementById("cancel").onclick = () => this._exitEdit(false);
+    root.getElementById("save").onclick = () => this._exitEdit(true);
+    this._bindDrag(root, day);
+
+    const picker = document.createElement("ha-entity-picker");
+    picker.hass = this._hass;
+    picker.includeDomains = ["light", "switch", "media_player", "fan", "input_boolean"];
+    picker.addEventListener("value-changed", (ev) => {
+      const v = ev.detail && ev.detail.value;
+      if (v) {
+        picker.value = "";
+        this._addTrack(v, day);
+      }
+    });
+    root.getElementById("pickwrap").appendChild(picker);
+  }
+
   _render() {
     if (!this._data || !this._data.days || !this._data.days.length) {
-      this._renderError({ message: "Aucun séjour à afficher (vérifie les dates du preset)." });
+      this._renderError({ message: "Aucun séjour à afficher (vérifie les dates du séjour)." });
       return;
     }
     const day = this._data.days[this._selected];
+    if (this._edit && this._config) {
+      this._renderEdit(day);
+      return;
+    }
     const p = parseLocal(day.date);
     const dateLabel = `${p.date.slice(8)}/${p.date.slice(5, 7)}`;
     const armed = this._data.armed;
@@ -333,6 +562,7 @@ class HouseAgentKevinCard extends HTMLElement {
             <div class="dsel"><b>${dateLabel}</b><div class="mix">${day.mix_name}</div></div>
             <button id="next">›</button>
             <button class="btn" id="regen" title="Re-tirer les aléas">⟳</button>
+            <button class="btn" id="edit" title="Éditer le mix de ce jour">✎</button>
           </div>
         </div>
         <div class="paint"><i class="mdi mdi-brush"></i>Mix du ${dateLabel} :<select id="mixpick">${mixOpts}</select><span>pinceau</span></div>
@@ -350,6 +580,7 @@ class HouseAgentKevinCard extends HTMLElement {
     root.getElementById("prev").onclick = () => { this._selected = (this._selected + this._data.days.length - 1) % this._data.days.length; this._render(); };
     root.getElementById("next").onclick = () => { this._selected = (this._selected + 1) % this._data.days.length; this._render(); };
     root.getElementById("regen").onclick = () => this._regenerate();
+    root.getElementById("edit").onclick = () => this._enterEdit();
     root.getElementById("arm").onclick = () => this._toggleArm();
     root.querySelectorAll(".day").forEach((btn) => {
       btn.onclick = () => { this._selected = +btn.dataset.i; this._render(); };
