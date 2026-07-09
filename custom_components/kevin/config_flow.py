@@ -85,11 +85,15 @@ class KevinOptionsFlow(OptionsFlow):
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
 
-    def _current(self) -> dict:
-        return self._entry.options.get("config") or self._entry.data.get("config") or load_preset()
+    async def _current(self) -> dict:
+        """Effective config. Reads the preset off the executor — never block the loop."""
+        stored = self._entry.options.get("config") or self._entry.data.get("config")
+        if stored:
+            return stored
+        return await self.hass.async_add_executor_job(load_preset)
 
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
-        current = self._current()
+        current = await self._current()
 
         if user_input is not None:
             new_config = apply_options(current, user_input)
