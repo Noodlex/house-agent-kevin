@@ -5,11 +5,19 @@
 
 const PALETTE = ["#14b8a6", "#8b5cf6", "#f59e0b", "#ec4899", "#3b82f6", "#10b981", "#f43f5e"];
 
-const LEFT = 150;
-const RIGHT = 635;
-const WIDTH = RIGHT - LEFT;      // px for the 16:00 -> 02:00 window
-const SPAN_MIN = 600;            // 10 hours
+const SPAN_MIN = 600;            // the 16:00 -> 02:00 window, in minutes
 const START_MIN = 16 * 60;
+const ROW_H = 24;                // px per track row
+const TOP = 30;                  // px above the first row (hour labels)
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function truncate(s, max) {
+  s = String(s);
+  return s.length > max ? s.slice(0, max - 1) + "…" : s;
+}
 
 function parseLocal(iso) {
   const m = String(iso).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
@@ -32,6 +40,32 @@ class HouseAgentKevinCard extends HTMLElement {
 
   getCardSize() {
     return 9;
+  }
+
+  connectedCallback() {
+    // Re-render when the card is resized so 1 SVG unit stays 1 real pixel.
+    if (this._ro) return;
+    this._ro = new ResizeObserver(() => {
+      const w = this._innerWidth();
+      if (w !== this._lastWidth && this._data) {
+        this._lastWidth = w;
+        this._render();
+      }
+    });
+    this._ro.observe(this);
+  }
+
+  disconnectedCallback() {
+    if (this._ro) {
+      this._ro.disconnect();
+      this._ro = null;
+    }
+  }
+
+  _innerWidth() {
+    const w = this.getBoundingClientRect().width;
+    // 28px = the ha-card horizontal padding declared in the styles below.
+    return Math.max(340, Math.round((w || 680) - 28));
   }
 
   async _load() {
@@ -87,7 +121,7 @@ class HouseAgentKevinCard extends HTMLElement {
 
   _xForMin(mins) {
     const v = Math.max(0, Math.min(SPAN_MIN, mins - START_MIN));
-    return LEFT + (v / SPAN_MIN) * WIDTH;
+    return this._L + (v / SPAN_MIN) * (this._R - this._L);
   }
 
   _xForIso(iso, dayDate) {
@@ -125,11 +159,20 @@ class HouseAgentKevinCard extends HTMLElement {
   _svg(day) {
     const kev = this._buildTracks(day);
     const ref = day.reference || [];
-    const y0 = 30;
-    const rowH = 24;
+
+    // 1 SVG unit = 1 real pixel: the viewBox is built at the measured width, so
+    // nothing gets scaled up when the card is wide (e.g. in a panel view).
+    const W = this._innerWidth();
+    this._lastWidth = W;
+    const narrow = W < 620;
+    this._L = narrow ? 96 : 150;           // label column
+    this._R = W - 8;
+    const labelChars = narrow ? 11 : 18;
+
+    const y0 = TOP;
     const nRows = ref.length + kev.length;
-    const bottom = y0 + nRows * rowH;
-    const H = bottom + 44;
+    const bottom = y0 + nRows * ROW_H;
+    const H = bottom + 34;
     const safety = day.events.find((e) => e.action === "safety_off");
     const safetyEnd = safety ? safety.t : null;
 
@@ -145,21 +188,26 @@ class HouseAgentKevinCard extends HTMLElement {
     const sunLabel = `${sunP.h}h${String(sunP.min).padStart(2, "0")}`;
 
     const parts = [];
-    parts.push(`<svg viewBox="0 0 680 ${H}" width="100%" role="img">`);
+    parts.push(`<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img" style="display:block">`);
     // sun layers
-    parts.push(`<rect x="${LEFT}" y="22" width="${bandL - LEFT}" height="${bottom - 22}" fill="#facc15" fill-opacity="0.10"/>`);
+    parts.push(`<rect x="${this._L}" y="22" width="${bandL - this._L}" height="${bottom - 22}" fill="#facc15" fill-opacity="0.10"/>`);
     parts.push(`<rect x="${bandL}" y="22" width="${bandR - bandL}" height="${bottom - 22}" fill="#6366f1" fill-opacity="0.18"/>`);
-    parts.push(`<rect x="${bandR}" y="22" width="${RIGHT - bandR}" height="${bottom - 22}" fill="#1e3a8a" fill-opacity="0.20"/>`);
-    // hour grid + labels
+    parts.push(`<rect x="${bandR}" y="22" width="${this._R - bandR}" height="${bottom - 22}" fill="#1e3a8a" fill-opacity="0.20"/>`);
+    // hour grid + labels (thin out the labels when there is no room)
+    const step = W < 520 ? 3 : W < 760 ? 2 : 1;
     for (let h = 16; h <= 26; h++) {
       const x = this._xForMin(h * 60);
       parts.push(`<line x1="${x}" y1="22" x2="${x}" y2="${bottom}" stroke="var(--divider-color,#ddd)" stroke-opacity="0.5"/>`);
-      parts.push(`<text x="${x}" y="14" text-anchor="middle" class="tm">${h % 24}h</text>`);
+      if ((h - 16) % step === 0) {
+        parts.push(`<text x="${x}" y="14" text-anchor="middle" class="tm">${h % 24}h</text>`);
+      }
     }
     // sunset marker
     parts.push(`<line x1="${sunX}" y1="22" x2="${sunX}" y2="${bottom}" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 3"/>`);
     parts.push(`<circle cx="${sunX}" cy="26" r="4" fill="#f97316"/>`);
-    parts.push(`<text x="${sunX + 7}" y="30" class="tm" fill="#c2410c">coucher ${sunLabel}</text>`);
+    const sunAnchor = sunX > W - 90 ? "end" : "start";
+    const sunTx = sunAnchor === "end" ? sunX - 8 : sunX + 8;
+    parts.push(`<text x="${sunTx}" y="30" text-anchor="${sunAnchor}" class="tm" fill="#c2410c">coucher ${sunLabel}</text>`);
     // safety off marker
     if (safetyEnd) {
       const sx = this._xForIso(safetyEnd, day.date);
@@ -168,9 +216,9 @@ class HouseAgentKevinCard extends HTMLElement {
     // reference rows (grey — already automated, not controlled by Kevin)
     let row = 0;
     ref.forEach((tr) => {
-      const cy = y0 + row * rowH + 12;
+      const cy = y0 + row * ROW_H + 12;
       row += 1;
-      parts.push(`<text x="8" y="${cy + 4}" class="tm">${tr.name}</text>`);
+      parts.push(`<text x="6" y="${cy + 4}" class="tm">${esc(truncate(tr.name, labelChars))}</text>`);
       for (const c of tr.clips) {
         const x1 = this._xForIso(c.start, day.date);
         const x2 = this._xForIso(c.end, day.date);
@@ -181,18 +229,19 @@ class HouseAgentKevinCard extends HTMLElement {
       for (const p of tr.points) {
         const x = this._xForIso(p.at, day.date);
         parts.push(`<polygon points="${x},${cy - 6} ${x + 6},${cy} ${x},${cy + 6} ${x - 6},${cy}" fill="none" stroke="#94a3b8"/>`);
-        if (p.label) parts.push(`<text x="${x + 9}" y="${cy + 4}" class="tm">${p.label}</text>`);
+        if (p.label) parts.push(`<text x="${x + 9}" y="${cy + 4}" class="tm">${esc(p.label)}</text>`);
       }
     });
     if (ref.length) {
-      const sepY = y0 + ref.length * rowH;
-      parts.push(`<line x1="8" y1="${sepY}" x2="${RIGHT}" y2="${sepY}" stroke="var(--divider-color,#ccc)" stroke-dasharray="2 3"/>`);
+      const sepY = y0 + ref.length * ROW_H;
+      parts.push(`<line x1="6" y1="${sepY}" x2="${this._R}" y2="${sepY}" stroke="var(--divider-color,#ccc)" stroke-dasharray="2 3"/>`);
     }
     // Kevin rows (turquoise — controlled)
     kev.forEach((tr) => {
-      const cy = y0 + row * rowH + 12;
+      const cy = y0 + row * ROW_H + 12;
       row += 1;
-      parts.push(`<text x="8" y="${cy + 4}" class="tl">${this._friendly(tr.eid)}</text>`);
+      const name = truncate(this._friendly(tr.eid), labelChars);
+      parts.push(`<title>${esc(this._friendly(tr.eid))}</title><text x="6" y="${cy + 4}" class="tl">${esc(name)}</text>`);
       for (const [start, end] of tr.intervals) {
         const x1 = this._xForIso(start, day.date);
         const x2 = end ? this._xForIso(end, day.date) : this._xForIso(safetyEnd || day.sunset, day.date);
@@ -204,7 +253,9 @@ class HouseAgentKevinCard extends HTMLElement {
         parts.push(`<polygon points="${x},${cy - 7} ${x + 7},${cy} ${x},${cy + 7} ${x - 7},${cy}" fill="#0f766e"/>`);
       }
     });
-    parts.push(`<text x="${LEFT}" y="${bottom + 22}" class="tm">Bande violette = le coucher tombe ici selon la date du séjour.</text>`);
+    if (!narrow) {
+      parts.push(`<text x="${this._L}" y="${bottom + 22}" class="tm">Bande violette = le coucher tombe ici selon la date du séjour.</text>`);
+    }
     parts.push(`</svg>`);
     return parts.join("");
   }
