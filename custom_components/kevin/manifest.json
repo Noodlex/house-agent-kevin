@@ -1,13 +1,17 @@
 {
   "domain": "kevin",
   "name": "House Agent Kevin",
-  "codeowners": ["@Noodlex"],
+  "codeowners": [
+    "@Noodlex"
+  ],
   "config_flow": true,
-  "dependencies": ["sun"],
+  "dependencies": [
+    "sun"
+  ],
   "documentation": "https://github.com/Noodlex/house-agent-kevin",
   "integration_type": "service",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Noodlex/house-agent-kevin/issues",
   "requirements": [],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }
