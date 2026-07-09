@@ -9,6 +9,8 @@ See VISION.md and docs/MVP-PLAN.md in the repo.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import os
 
@@ -44,7 +46,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     config = KevinConfig.from_dict(raw)
 
-    coordinator = KevinCoordinator(hass, entry, config)
+    # Fingerprint of the entry-provided config. The coordinator keeps card edits
+    # across restarts, but a change here (i.e. the user went through the options
+    # form) is an explicit reset and wins.
+    source_rev = hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest()[:16]
+
+    coordinator = KevinCoordinator(hass, entry, config, source_rev)
     await coordinator.async_load()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

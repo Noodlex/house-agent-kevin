@@ -37,12 +37,16 @@ _TURN_DOMAINS = {"light", "switch", "media_player", "fan", "input_boolean", "cli
 class KevinCoordinator:
     """Owns the plan lifecycle for one config entry."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, config: KevinConfig) -> None:
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, config: KevinConfig, source_rev: str = ""
+    ) -> None:
         self.hass = hass
         self.entry = entry
         self.config = config
+        self._source_rev = source_rev
         self.armed = False
         self.plan: Plan | None = None
+        self._config_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.config")
         self._store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.plan")
         self._overrides_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.overrides")
         self._regie_store: Store = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.regie")
@@ -53,7 +57,21 @@ class KevinCoordinator:
 
     # -- lifecycle --------------------------------------------------------- #
     async def async_load(self) -> None:
-        """Load any persisted plan (called on setup, before entities add)."""
+        """Load the persisted config (card edits) and plan.
+
+        The config Store wins over the config entry, *unless* the entry's options
+        changed since it was written (tracked by `_source_rev`): going through the
+        HA options form is an explicit reset, a mere restart is not.
+        """
+        stored = await self._config_store.async_load()
+        if stored and stored.get("rev") == self._source_rev and stored.get("config"):
+            try:
+                self.config = KevinConfig.from_dict(stored["config"])
+            except (KeyError, ValueError) as err:
+                _LOGGER.warning("Ignoring unreadable stored config: %s", err)
+        else:
+            await self._save_config()
+
         data = await self._store.async_load()
         if data:
             try:
@@ -115,6 +133,22 @@ class KevinCoordinator:
         self._reschedule()
         self._notify()
 
+    async def _save_config(self) -> None:
+        await self._config_store.async_save({"rev": self._source_rev, "config": self.config.to_dict()})
+
+    async def async_update_config(self, raw: dict) -> None:
+        """Replace the config from the card editor. Raises if `raw` is invalid."""
+        config = KevinConfig.from_dict(raw)  # validation: raises on a bad payload
+        self.config = config
+        await self._save_config()
+        if self.armed:
+            # Same seed: editing a clip must not re-roll everyone else's swing.
+            await self._generate(keep_seed=True)
+            self._reschedule()
+        else:
+            self.plan = None  # force a fresh preview on the next fetch
+        self._notify()
+
     async def async_set_override(self, day_iso: str, mix_id: str | None) -> None:
         """Paint a day with a specific mix (or clear it back to the rule)."""
         overrides = self.config.sejour.overrides
@@ -123,6 +157,7 @@ class KevinCoordinator:
         else:
             overrides.pop(day_iso, None)
         await self._overrides_store.async_save(overrides)
+        await self._save_config()
         if self.armed:
             # Keep the seed so only the painted day changes, not everyone's swing.
             await self._generate(keep_seed=True)

@@ -27,6 +27,8 @@ def async_register(hass: HomeAssistant) -> None:
     hass.data[_WS_REGISTERED] = True
     websocket_api.async_register_command(hass, ws_get_plan)
     websocket_api.async_register_command(hass, ws_set_override)
+    websocket_api.async_register_command(hass, ws_get_config)
+    websocket_api.async_register_command(hass, ws_update_config)
 
 
 def _first_coordinator(hass: HomeAssistant):
@@ -100,4 +102,33 @@ async def ws_set_override(hass: HomeAssistant, connection, msg: dict) -> None:
         connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
         return
     await coordinator.async_set_override(msg["date"], msg.get("mix"))
+    connection.send_result(msg["id"], {"ok": True})
+
+
+@websocket_api.websocket_command({vol.Required("type"): "kevin/get_config"})
+@websocket_api.async_response
+async def ws_get_config(hass: HomeAssistant, connection, msg: dict) -> None:
+    """The editable config (mixes, séjour, reference tracks, safety)."""
+    coordinator = _first_coordinator(hass)
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
+        return
+    connection.send_result(msg["id"], {"config": coordinator.config.to_dict()})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "kevin/update_config", vol.Required("config"): dict}
+)
+@websocket_api.async_response
+async def ws_update_config(hass: HomeAssistant, connection, msg: dict) -> None:
+    """Save a config edited from the card, then regenerate the plan."""
+    coordinator = _first_coordinator(hass)
+    if coordinator is None:
+        connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
+        return
+    try:
+        await coordinator.async_update_config(msg["config"])
+    except (KeyError, ValueError, TypeError) as err:
+        connection.send_error(msg["id"], "invalid_config", f"Invalid config: {err}")
+        return
     connection.send_result(msg["id"], {"ok": True})
