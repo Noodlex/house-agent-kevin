@@ -494,17 +494,48 @@ class HouseAgentKevinCard extends HTMLElement {
     root.getElementById("save").onclick = () => this._exitEdit(true);
     this._bindDrag(root, day);
 
-    const picker = document.createElement("ha-entity-picker");
-    picker.hass = this._hass;
-    picker.includeDomains = ["light", "switch", "media_player", "fan", "input_boolean"];
-    picker.addEventListener("value-changed", (ev) => {
-      const v = ev.detail && ev.detail.value;
-      if (v) {
-        picker.value = "";
-        this._addTrack(v, day);
-      }
+    this._appendPicker(root.getElementById("pickwrap"), day);
+  }
+
+  _addDomains() {
+    return ["light", "switch", "media_player", "fan", "input_boolean"];
+  }
+
+  /** Entity chooser: ha-entity-picker when it's loaded, else a native select. */
+  _appendPicker(container, day) {
+    if (customElements.get("ha-entity-picker")) {
+      const picker = document.createElement("ha-entity-picker");
+      picker.hass = this._hass;
+      picker.includeDomains = this._addDomains();
+      picker.allowCustomEntity = false;
+      picker.addEventListener("value-changed", (ev) => {
+        const v = ev.detail && ev.detail.value;
+        if (v) {
+          picker.value = "";
+          this._addTrack(v, day);
+        }
+      });
+      container.appendChild(picker);
+      return;
+    }
+
+    // Fallback: a native <select>, always available even if HA hasn't lazy-loaded
+    // ha-entity-picker on this page yet.
+    const domains = this._addDomains();
+    const used = new Set(this._clips(day).map((c) => c.entity_id));
+    const ids = Object.keys(this._hass.states)
+      .filter((id) => domains.includes(id.split(".")[0]) && !used.has(id))
+      .sort();
+    const sel = document.createElement("select");
+    sel.innerHTML =
+      '<option value="">— choisir une entité —</option>' +
+      ids
+        .map((id) => `<option value="${esc(id)}">${esc(this._friendly(id))}</option>`)
+        .join("");
+    sel.addEventListener("change", () => {
+      if (sel.value) this._addTrack(sel.value, day);
     });
-    root.getElementById("pickwrap").appendChild(picker);
+    container.appendChild(sel);
   }
 
   _render() {
