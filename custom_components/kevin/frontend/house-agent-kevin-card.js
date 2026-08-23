@@ -457,7 +457,13 @@ class HouseAgentKevinCard extends HTMLElement {
 
   _renderEdit(day) {
     const root = this._root();
-    const mix = this._config.mixes[this._mixId(day)];
+    const mixId = this._mixId(day);
+    const mix = this._config.mixes[mixId];
+    // Editing a mix propagates to every day the plan assigns to it.
+    const affected = this._data.days.filter((d) => d.mix === mixId);
+    const n = affected.length;
+    const dates = affected.map((d) => `${d.date.slice(8)}/${d.date.slice(5, 7)}`);
+    const datesLabel = dates.length > 8 ? dates.slice(0, 8).join(", ") + "…" : dates.join(", ");
     root.innerHTML = `
       <style>
         ha-card { padding: 12px 14px; }
@@ -465,6 +471,7 @@ class HouseAgentKevinCard extends HTMLElement {
         .title { font-weight:600; color:var(--primary-text-color); }
         .btn { cursor:pointer; border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:8px; height:32px; padding:0 12px; font-size:13px; }
         .btn.primary { background:#14b8a6; border-color:#14b8a6; color:#fff; font-weight:600; }
+        .affected { font-size:11px; color:#0f766e; margin:4px 0 0; font-weight:600; }
         .hint { font-size:11px; color:var(--secondary-text-color); margin:6px 0 4px; }
         .add { display:flex; align-items:center; gap:10px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .add span:last-child { flex:1; }
@@ -481,6 +488,9 @@ class HouseAgentKevinCard extends HTMLElement {
             <button class="btn" id="cancel">Annuler</button>
             <button class="btn primary" id="save">Enregistrer</button>
           </div>
+        </div>
+        <div class="affected" title="${esc(dates.join(", "))}">
+          S'applique à ${n} jour${n > 1 ? "s" : ""} du séjour${n ? ` : ${esc(datesLabel)}` : ""}
         </div>
         <div class="hint">
           Glisse le corps d'un clip pour le déplacer, ses poignées pour changer début/fin (aimanté à 5 min).
