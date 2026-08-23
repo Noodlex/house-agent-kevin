@@ -144,6 +144,58 @@ class HouseAgentKevinCard extends HTMLElement {
     this._config = res.config;
     this._edit = true;
     this._dirty = false;
+    this._sel = null;
+    this._render();
+  }
+
+  // --- per-clip edge/jitter edits (inspector) ---------------------------- //
+
+  _sunMins(event, day) {
+    const p = parseLocal(event === "sunrise" ? day.sunrise : day.sunset);
+    return p.h * 60 + p.min;
+  }
+
+  _setEdgeType(clip, edge, type, day) {
+    const a = clip[edge];
+    if (a.type === type) return;
+    const mins = this._anchorMins(a, day);
+    if (type === "sun") {
+      clip[edge] = { type: "sun", event: "sunset", offset: Math.round(mins - this._sunMins("sunset", day)) };
+    } else {
+      const m = ((Math.round(mins) % 1440) + 1440) % 1440;
+      clip[edge] = { type: "fixed", time: `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}` };
+    }
+    this._dirty = true;
+    this._render();
+  }
+
+  _setEdgeEvent(clip, edge, event, day) {
+    const a = clip[edge];
+    if (a.type !== "sun") return;
+    const mins = this._anchorMins(a, day); // keep the resolved time stable
+    a.event = event;
+    a.offset = Math.round(mins - this._sunMins(event, day));
+    this._dirty = true;
+    this._render();
+  }
+
+  _setEdgeOffset(clip, edge, offset) {
+    clip[edge].offset = Math.round(+offset || 0);
+    this._dirty = true;
+    this._render();
+  }
+
+  _setEdgeTime(clip, edge, time) {
+    if (!/^\d{1,2}:\d{2}/.test(time)) return;
+    clip[edge].time = time.slice(0, 5);
+    this._dirty = true;
+    this._render();
+  }
+
+  _setJitter(clip, value) {
+    if (value === "" || value == null) delete clip.jitter;
+    else clip.jitter = Math.max(0, Math.round(+value));
+    this._dirty = true;
     this._render();
   }
 
@@ -176,6 +228,7 @@ class HouseAgentKevinCard extends HTMLElement {
     const mix = this._config.mixes[this._mixId(day)];
     if (!mix) return;
     mix.clips = mix.clips.filter((c) => c.entity_id !== entityId);
+    this._sel = null; // indices shifted; drop any selection
     this._dirty = true;
     this._render();
   }
@@ -368,9 +421,11 @@ class HouseAgentKevinCard extends HTMLElement {
       const x2 = this._xForMin(e);
       const w = Math.max(6, x2 - x1);
       const full = this._friendly(clip.entity_id);
-      parts.push(`<text x="6" y="${cy + 4}" class="tl">${esc(truncate(full, labelChars))}</text>`);
+      const selected = i === this._sel;
+      parts.push(`<text x="6" y="${cy + 4}" class="${selected ? "tlsel" : "tl"}">${esc(truncate(full, labelChars))}</text>`);
       parts.push(`<text x="${this._L - 14}" y="${cy + 4}" class="rm" data-rm="${esc(clip.entity_id)}">✕</text>`);
-      parts.push(`<rect class="clip" data-ci="${i}" data-edge="body" x="${x1}" y="${cy - 8}" width="${w}" height="16" rx="3" fill="#14b8a6" fill-opacity="0.85"/>`);
+      const stroke = selected ? ' stroke="#083344" stroke-width="2"' : "";
+      parts.push(`<rect class="clip" data-ci="${i}" data-edge="body" x="${x1}" y="${cy - 8}" width="${w}" height="16" rx="3" fill="#14b8a6" fill-opacity="0.85"${stroke}/>`);
       parts.push(`<rect class="hnd" data-ci="${i}" data-edge="start" x="${x1 - 4}" y="${cy - 9}" width="8" height="18" rx="2" fill="#0f766e"/>`);
       parts.push(`<rect class="hnd" data-ci="${i}" data-edge="end" x="${x2 - 4}" y="${cy - 9}" width="8" height="18" rx="2" fill="#0f766e"/>`);
       const tag = clip.start.type === "sun" ? "☀" : "🕑";
@@ -397,10 +452,12 @@ class HouseAgentKevinCard extends HTMLElement {
       const s0 = this._anchorMins(clip.start, day);
       let e0 = this._anchorMins(clip.end, day);
       if (e0 <= s0) e0 += 1440;
+      let moved = false;
 
       const onMove = (m) => {
+        if (!moved && Math.abs(m.clientX - startX) < 4) return; // click threshold
+        moved = true;
         const d = Math.round((m.clientX - startX) / pxPerMin / 5) * 5;
-        if (!d && !this._dirty) return;
         if (edge === "body") {
           this._setAnchor(clip.start, s0 + d, day);
           this._setAnchor(clip.end, e0 + d, day);
@@ -415,6 +472,10 @@ class HouseAgentKevinCard extends HTMLElement {
       const onUp = () => {
         window.removeEventListener("pointermove", onMove);
         window.removeEventListener("pointerup", onUp);
+        // A click (no drag) selects the clip and opens the inspector; a drag
+        // ended, so re-render to refresh the inspector's values too.
+        this._sel = ci;
+        this._render();
       };
       window.addEventListener("pointermove", onMove);
       window.addEventListener("pointerup", onUp);
@@ -475,7 +536,17 @@ class HouseAgentKevinCard extends HTMLElement {
         .hint { font-size:11px; color:var(--secondary-text-color); margin:6px 0 4px; }
         .add { display:flex; align-items:center; gap:10px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .add span:last-child { flex:1; }
+        .insp { margin-top:10px; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; }
+        .insp-head { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+        .insp-head b { color:var(--primary-text-color); font-size:13px; }
+        .insp-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
+        .insp-row > label { min-width:52px; }
+        .insp input, .insp select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
+        .insp input[type=number] { width:66px; }
+        .tbtn { cursor:pointer; border:1px solid var(--divider-color); background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 8px; font-size:12px; }
+        .lnk { cursor:pointer; color:var(--error-color,#c0392b); font-size:12px; }
         text.tl { fill: var(--primary-text-color); font: 12px var(--paper-font-body1_-_font-family, sans-serif); }
+        text.tlsel { fill: var(--primary-text-color); font: 700 12px var(--paper-font-body1_-_font-family, sans-serif); }
         text.tm { fill: var(--secondary-text-color); font: 11px var(--paper-font-body1_-_font-family, sans-serif); }
         text.rm { fill: var(--error-color, #c0392b); font: 13px sans-serif; cursor:pointer; }
         rect.clip { cursor: grab; }
@@ -493,18 +564,71 @@ class HouseAgentKevinCard extends HTMLElement {
           S'applique à ${n} jour${n > 1 ? "s" : ""} du séjour${n ? ` : ${esc(datesLabel)}` : ""}
         </div>
         <div class="hint">
-          Glisse le corps d'un clip pour le déplacer, ses poignées pour changer début/fin (aimanté à 5 min).
-          ✕ retire la piste. ☀ = bord ancré au soleil (c'est le décalage qui bouge) · 🕑 = heure fixe.
+          Glisse un clip pour le déplacer (poignées = début/fin, aimanté à 5 min), ou <b>clique-le</b> pour l'éditer finement.
+          ✕ retire la piste.
         </div>
         <div id="svgwrap">${this._svgEdit(day)}</div>
+        ${this._inspectorHtml(day)}
         <div class="add"><span>Ajouter une piste :</span><span id="pickwrap"></span></div>
       </ha-card>`;
 
     root.getElementById("cancel").onclick = () => this._exitEdit(false);
     root.getElementById("save").onclick = () => this._exitEdit(true);
     this._bindDrag(root, day);
-
+    this._bindInspector(root, day);
     this._appendPicker(root.getElementById("pickwrap"), day);
+  }
+
+  _edgeControlsHtml(clip, edge) {
+    const a = clip[edge];
+    if (a.type === "sun") {
+      return (
+        `<button class="tbtn" data-act="type" data-edge="${edge}" title="Basculer en heure fixe">☀ soleil</button>` +
+        `<select data-act="event" data-edge="${edge}">` +
+        `<option value="sunset"${a.event !== "sunrise" ? " selected" : ""}>coucher</option>` +
+        `<option value="sunrise"${a.event === "sunrise" ? " selected" : ""}>lever</option></select>` +
+        `<input type="number" step="5" value="${a.offset || 0}" data-act="off" data-edge="${edge}"> min`
+      );
+    }
+    return (
+      `<button class="tbtn" data-act="type" data-edge="${edge}" title="Basculer en ancrage soleil">🕑 fixe</button>` +
+      `<input type="time" step="300" value="${esc(a.time)}" data-act="time" data-edge="${edge}">`
+    );
+  }
+
+  _inspectorHtml(day) {
+    const clips = this._clips(day);
+    if (this._sel == null || !clips[this._sel]) return "";
+    const clip = clips[this._sel];
+    const mix = this._config.mixes[this._mixId(day)];
+    const def = mix ? mix.jitter_default : 20;
+    return `
+      <div class="insp">
+        <div class="insp-head">
+          <b>${esc(this._friendly(clip.entity_id))}</b>
+          <span><span class="lnk" data-act="del">Supprimer</span> · <span class="lnk" data-act="close">fermer</span></span>
+        </div>
+        <div class="insp-row"><label>Début</label>${this._edgeControlsHtml(clip, "start")}</div>
+        <div class="insp-row"><label>Fin</label>${this._edgeControlsHtml(clip, "end")}</div>
+        <div class="insp-row"><label>Swing</label><input type="number" min="0" max="90" step="5" value="${clip.jitter ?? ""}" placeholder="${def}" data-act="jitter"> min <span>(vide = défaut du mix : ${def})</span></div>
+      </div>`;
+  }
+
+  _bindInspector(root, day) {
+    const clips = this._clips(day);
+    const clip = this._sel != null ? clips[this._sel] : null;
+    if (!clip) return;
+    root.querySelectorAll(".insp [data-act]").forEach((el) => {
+      const act = el.dataset.act;
+      const edge = el.dataset.edge;
+      if (act === "type") el.addEventListener("click", () => this._setEdgeType(clip, edge, clip[edge].type === "sun" ? "fixed" : "sun", day));
+      else if (act === "event") el.addEventListener("change", () => this._setEdgeEvent(clip, edge, el.value, day));
+      else if (act === "off") el.addEventListener("change", () => this._setEdgeOffset(clip, edge, el.value));
+      else if (act === "time") el.addEventListener("change", () => this._setEdgeTime(clip, edge, el.value));
+      else if (act === "jitter") el.addEventListener("change", () => this._setJitter(clip, el.value));
+      else if (act === "del") el.addEventListener("click", () => { this._sel = null; this._removeTrack(clip.entity_id, day); });
+      else if (act === "close") el.addEventListener("click", () => { this._sel = null; this._render(); });
+    });
   }
 
   _addDomains() {
