@@ -78,10 +78,21 @@ async def _register_frontend(hass: HomeAssistant) -> None:
     except ImportError:  # older HA
         hass.http.register_static_path(_CARD_URL, _CARD_PATH, cache_headers=False)
 
+    # Cache-bust the auto-loaded module by version, so browsers (and the HA
+    # service worker) fetch the new card after an update instead of a stale copy.
+    version = "0"
+    try:
+        from homeassistant.loader import async_get_integration
+
+        integration = await async_get_integration(hass, DOMAIN)
+        version = str(integration.version)
+    except Exception:  # noqa: BLE001
+        pass
+
     try:
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, _CARD_URL)
+        add_extra_js_url(hass, f"{_CARD_URL}?v={version}")
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Could not auto-load the Kevin card (%s); add it as a resource manually", err)
 
