@@ -26,9 +26,8 @@
     "step": {
       "init": {
         "title": "House Agent Kevin — réglages",
-        "description": "Réajustez le plan. Changer les entités reconstruit le mix de départ.",
+        "description": "Réajustez les réglages du plan. Les entités et les plages se modifient depuis la carte.",
         "data": {
-          "entities": "Entités à piloter",
           "start_date": "Début du séjour",
           "end_date": "Fin du séjour",
           "mode": "Mode de planification",

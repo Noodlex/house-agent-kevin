@@ -26,9 +26,8 @@
     "step": {
       "init": {
         "title": "House Agent Kevin — settings",
-        "description": "Re-tune the plan. Changing the entities rebuilds the starter mix.",
+        "description": "Re-tune the plan settings. Entities and clips are edited from the card.",
         "data": {
-          "entities": "Entities to control",
           "start_date": "Holiday start",
           "end_date": "Holiday end",
           "mode": "Planning mode",
