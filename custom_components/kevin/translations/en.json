@@ -3,9 +3,8 @@
     "step": {
       "user": {
         "title": "House Agent Kevin",
-        "description": "Pick the entities Kevin should control and your holiday dates. A starter evening \"mix\" is built automatically — you can fine-tune it later.",
+        "description": "Set your holiday window and a few settings. The entities Kevin controls are added afterwards from the card, right on the timeline.",
         "data": {
-          "entities": "Entities to control (lights, plugs, media, scripts)",
           "start_date": "Holiday start",
           "end_date": "Holiday end",
           "mode": "Planning mode",
@@ -14,9 +13,6 @@
           "safety_off": "Safety off time"
         }
       }
-    },
-    "error": {
-      "no_entities": "Pick at least one entity for Kevin to control."
     },
     "abort": {
       "already_configured": "House Agent Kevin is already set up."
