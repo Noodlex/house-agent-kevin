@@ -296,7 +296,7 @@ class HouseAgentKevinCard extends HTMLElement {
     const labelChars = narrow ? 11 : 18;
 
     const y0 = TOP;
-    const nRows = ref.length + kev.length;
+    const nRows = Math.max(1, ref.length + kev.length);
     const bottom = y0 + nRows * ROW_H;
     const H = bottom + 34;
     const safety = day.events.find((e) => e.action === "safety_off");
@@ -379,7 +379,9 @@ class HouseAgentKevinCard extends HTMLElement {
         parts.push(`<polygon points="${x},${cy - 7} ${x + 7},${cy} ${x},${cy + 7} ${x - 7},${cy}" fill="#0f766e"/>`);
       }
     });
-    if (!narrow) {
+    if (!kev.length) {
+      parts.push(`<text x="${this._L}" y="${y0 + 18}" class="tm">Aucune entité pour l'instant — clique ✎ pour en ajouter.</text>`);
+    } else if (!narrow) {
       parts.push(`<text x="${this._L}" y="${bottom + 22}" class="tm">Bande violette = le coucher tombe ici selon la date du séjour.</text>`);
     }
     parts.push(`</svg>`);
