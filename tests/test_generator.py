@@ -121,3 +121,36 @@ def test_resolve_reference_points():
     volets = next(t for t in ref if t["name"] == "Volets")
     assert len(volets["points"]) == 2
     assert volets["points"][0]["at"][11:16] == "20:30"  # fixed local time
+
+
+def test_swing_can_never_produce_a_day_long_clip():
+    """Colliding edges must stay a short window, not wrap to 24 hours.
+
+    A pattern whose two edges resolve to the same instant (e.g. "sunset +150"
+    against a fixed "00:15" in midsummer) used to have the midnight roll applied
+    *after* the swing, so an unlucky draw flipped the comparison and produced an
+    on/off pair a full day apart.
+    """
+    config = _config()
+    mix = models.Mix.from_dict(
+        {
+            "id": "edge",
+            "name": "Edge",
+            "jitter_default": 20,
+            "clips": [
+                {
+                    "entity_id": "light.salon",
+                    "start": {"type": "sun", "event": "sunset", "offset": 150},
+                    "end": {"type": "fixed", "time": "00:15"},
+                }
+            ],
+            "oneshots": [],
+        }
+    )
+    for offset in range(0, 30):          # a month of dates, many different draws
+        day = date(2026, 7, 1) + timedelta(days=offset)
+        events = generate_day(mix, day, PARIS, 99, config.safety_off)
+        on = next(e.t for e in events if e.action == "on")
+        off = next(e.t for e in events if e.action == "off")
+        assert off > on
+        assert (off - on) < timedelta(hours=12), f"{day}: {off - on}"

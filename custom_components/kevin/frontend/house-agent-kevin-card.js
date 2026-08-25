@@ -142,6 +142,8 @@ class HouseAgentKevinCard extends HTMLElement {
   async _enterEdit() {
     const res = await this._hass.connection.sendMessagePromise({ type: "kevin/get_config" });
     this._config = res.config;
+    this._timings = res.timings || [];
+    if (this._timingId == null && this._timings.length) this._timingId = this._timings[0].id;
     this._edit = true;
     this._dirty = false;
     this._sel = null;
@@ -211,15 +213,44 @@ class HouseAgentKevinCard extends HTMLElement {
     await this._load();
   }
 
+  _timing(id) {
+    return (this._timings || []).find((t) => t.id === id) || null;
+  }
+
+  _clipFromTiming(entityId, timingId) {
+    const t = this._timing(timingId);
+    if (!t) {
+      return {
+        entity_id: entityId,
+        start: { type: "sun", event: "sunset", offset: 0 },
+        end: { type: "sun", event: "sunset", offset: 120 },
+      };
+    }
+    const clip = {
+      entity_id: entityId,
+      start: JSON.parse(JSON.stringify(t.start)),
+      end: JSON.parse(JSON.stringify(t.end)),
+    };
+    if (t.jitter != null) clip.jitter = t.jitter;
+    return clip;
+  }
+
   _addTrack(entityId, day) {
     if (!entityId) return;
     const mix = this._config.mixes[this._mixId(day)];
     if (!mix || mix.clips.some((c) => c.entity_id === entityId)) return;
-    mix.clips.push({
-      entity_id: entityId,
-      start: { type: "sun", event: "sunset", offset: 0 },
-      end: { type: "sun", event: "sunset", offset: 120 },
-    });
+    mix.clips.push(this._clipFromTiming(entityId, this._timingId));
+    this._dirty = true;
+    this._render();
+  }
+
+  /** Re-shape an existing clip with a ready-made pattern (entity untouched). */
+  _applyTiming(clip, timingId) {
+    const t = this._timing(timingId);
+    if (!t) return;
+    clip.start = JSON.parse(JSON.stringify(t.start));
+    clip.end = JSON.parse(JSON.stringify(t.end));
+    if (t.jitter != null) clip.jitter = t.jitter;
     this._dirty = true;
     this._render();
   }
@@ -537,7 +568,7 @@ class HouseAgentKevinCard extends HTMLElement {
         .affected { font-size:11px; color:#0f766e; margin:4px 0 0; font-weight:600; }
         .hint { font-size:11px; color:var(--secondary-text-color); margin:6px 0 4px; }
         .add { display:flex; align-items:center; gap:10px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
-        .add span:last-child { flex:1; }
+        .add select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
         .insp { margin-top:10px; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; }
         .insp-head { display:flex; align-items:center; gap:8px; justify-content:space-between; }
         .insp-head b { color:var(--primary-text-color); font-size:13px; }
@@ -571,7 +602,11 @@ class HouseAgentKevinCard extends HTMLElement {
         </div>
         <div id="svgwrap">${this._svgEdit(day)}</div>
         ${this._inspectorHtml(day)}
-        <div class="add"><span>Ajouter une piste :</span><span id="pickwrap"></span></div>
+        <div class="add">
+          <span>Ajouter une piste :</span><span id="pickwrap"></span>
+          <select id="timingpick" title="Forme de la plage horaire">${this._timingOptions(this._timingId)}</select>
+        </div>
+        <div class="hint" id="timinghint">${esc(this._timingHint(this._timingId))}</div>
       </ha-card>`;
 
     root.getElementById("cancel").onclick = () => this._exitEdit(false);
@@ -579,6 +614,15 @@ class HouseAgentKevinCard extends HTMLElement {
     this._bindDrag(root, day);
     this._bindInspector(root, day);
     this._appendPicker(root.getElementById("pickwrap"), day);
+
+    const timingPick = root.getElementById("timingpick");
+    if (timingPick) {
+      timingPick.onchange = () => {
+        this._timingId = timingPick.value;
+        const hint = root.getElementById("timinghint");
+        if (hint) hint.textContent = this._timingHint(this._timingId);
+      };
+    }
   }
 
   _edgeControlsHtml(clip, edge) {
@@ -612,6 +656,9 @@ class HouseAgentKevinCard extends HTMLElement {
         </div>
         <div class="insp-row"><label>Début</label>${this._edgeControlsHtml(clip, "start")}</div>
         <div class="insp-row"><label>Fin</label>${this._edgeControlsHtml(clip, "end")}</div>
+        <div class="insp-row"><label>Modèle</label>
+          <select data-act="timing">${this._timingOptions(null, "— appliquer un modèle —")}</select>
+        </div>
         <div class="insp-row"><label>Swing</label><input type="number" min="0" max="90" step="5" value="${clip.jitter ?? ""}" placeholder="${def}" data-act="jitter"> min <span>(vide = défaut du mix : ${def})</span></div>
       </div>`;
   }
@@ -628,9 +675,23 @@ class HouseAgentKevinCard extends HTMLElement {
       else if (act === "off") el.addEventListener("change", () => this._setEdgeOffset(clip, edge, el.value));
       else if (act === "time") el.addEventListener("change", () => this._setEdgeTime(clip, edge, el.value));
       else if (act === "jitter") el.addEventListener("change", () => this._setJitter(clip, el.value));
+      else if (act === "timing") el.addEventListener("change", () => { if (el.value) this._applyTiming(clip, el.value); });
       else if (act === "del") el.addEventListener("click", () => { this._sel = null; this._removeTrack(clip.entity_id, day); });
       else if (act === "close") el.addEventListener("click", () => { this._sel = null; this._render(); });
     });
+  }
+
+  _timingOptions(selected, placeholder) {
+    const opts = (this._timings || []).map(
+      (t) => `<option value="${esc(t.id)}"${t.id === selected ? " selected" : ""}>${esc(t.name)}</option>`
+    );
+    if (placeholder) opts.unshift(`<option value="">${esc(placeholder)}</option>`);
+    return opts.join("");
+  }
+
+  _timingHint(id) {
+    const t = this._timing(id);
+    return t && t.hint ? t.hint : "";
   }
 
   _addDomains() {
