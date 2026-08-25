@@ -2,9 +2,9 @@
 
 The config flow is the setup wizard: pick the entities Kevin controls plus a few
 settings, and a working config (with a plausible starter mix) is built for you —
-no JSON editing. The options flow re-tunes those settings (and lets you re-pick
-entities, which rebuilds the starter mix). Fine per-clip editing lands in the
-card editor.
+no JSON editing. The options flow re-tunes *settings only* and never rebuilds the
+mix; tracks and clips are managed from the card editor, which is the single owner
+of what the evening looks like.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from homeassistant.helpers.selector import selector
 import homeassistant.util.dt as dt_util
 
 from .const import DOMAIN, MODE_GLOBAL, MODE_POOL, MODE_ROTATION, MODE_WEEKDAY
-from .defaults import build_config, build_default_mix
+from .defaults import build_config
 from .preset import apply_options, first_jitter, load_preset
 
 _ENTITY_SELECTOR = selector(
@@ -80,13 +80,21 @@ class KevinConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class KevinOptionsFlow(OptionsFlow):
-    """Re-tune settings; re-picking entities rebuilds the starter mix."""
+    """Re-tune settings. Never touches the arranged mix."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
 
     async def _current(self) -> dict:
-        """Effective config. Reads the preset off the executor — never block the loop."""
+        """Effective config — the *live* one, so card edits are never clobbered.
+
+        The coordinator holds the config actually in use (including everything
+        edited from the card). Falling back to the entry would resurrect a stale
+        copy and silently discard that work.
+        """
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id)
+        if coordinator is not None and getattr(coordinator, "config", None) is not None:
+            return coordinator.config.to_dict()
         stored = self._entry.options.get("config") or self._entry.data.get("config")
         if stored:
             return stored
@@ -96,22 +104,18 @@ class KevinOptionsFlow(OptionsFlow):
         current = await self._current()
 
         if user_input is not None:
+            # Only settings are applied here. The mix itself is NEVER rebuilt:
+            # doing so used to wipe everything arranged in the card (clip
+            # positions, per-clip swing, sun/fixed edges, one-shots) as soon as
+            # the form was submitted — even just to change a date.
+            # Tracks are added and removed from the card.
             new_config = apply_options(current, user_input)
-            entities = user_input.get("entities")
-            if entities:
-                # Rebuild the starter mix from the (possibly changed) entities,
-                # preserving its id so the séjour rule keeps pointing at it.
-                first_id = next(iter(new_config.get("mixes", {})), "soiree")
-                mix = build_default_mix(entities, jitter_default=int(user_input["jitter"]), mix_id=first_id)
-                new_config["mixes"][first_id] = mix
             return self.async_create_entry(title="", data={"config": new_config})
 
         sejour = current.get("sejour", {})
         rule = sejour.get("rule", {})
-        controlled = sorted({c["entity_id"] for m in current.get("mixes", {}).values() for c in m.get("clips", [])})
         schema = vol.Schema(
             {
-                vol.Optional("entities", default=controlled): _ENTITY_SELECTOR,
                 vol.Required("start_date", default=sejour.get("start_date")): selector({"date": {}}),
                 vol.Required("end_date", default=sejour.get("end_date")): selector({"date": {}}),
                 vol.Required("mode", default=rule.get("mode", MODE_GLOBAL)): _MODE_SELECTOR,

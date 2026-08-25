@@ -87,6 +87,7 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
     )
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "kevin/set_override",
@@ -116,6 +117,7 @@ async def ws_get_config(hass: HomeAssistant, connection, msg: dict) -> None:
     connection.send_result(msg["id"], {"config": coordinator.config.to_dict()})
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(
     {vol.Required("type"): "kevin/update_config", vol.Required("config"): dict}
 )
