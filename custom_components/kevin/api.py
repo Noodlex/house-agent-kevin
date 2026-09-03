@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN
 from .generator import resolve_reference
 from .sun import sun_times
+from .timings import TIMINGS
 
 _WS_REGISTERED = f"{DOMAIN}_ws_registered"
 
@@ -109,12 +110,14 @@ async def ws_set_override(hass: HomeAssistant, connection, msg: dict) -> None:
 @websocket_api.websocket_command({vol.Required("type"): "kevin/get_config"})
 @websocket_api.async_response
 async def ws_get_config(hass: HomeAssistant, connection, msg: dict) -> None:
-    """The editable config (mixes, séjour, reference tracks, safety)."""
+    """The editable config, plus the ready-made timing patterns for new clips."""
     coordinator = _first_coordinator(hass)
     if coordinator is None:
         connection.send_error(msg["id"], "not_found", "House Agent Kevin is not set up")
         return
-    connection.send_result(msg["id"], {"config": coordinator.config.to_dict()})
+    connection.send_result(
+        msg["id"], {"config": coordinator.config.to_dict(), "timings": TIMINGS}
+    )
 
 
 @websocket_api.require_admin

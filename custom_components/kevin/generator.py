@@ -89,20 +89,23 @@ def generate_day(
 
     for clip in mix.clips:
         jitter = clip.jitter if clip.jitter is not None else mix.jitter_default
+        nominal_start = resolve_anchor(clip.start, day, location)
+        nominal_end = resolve_anchor(clip.end, day, location)
+        if nominal_end <= nominal_start:
+            # A fixed end past midnight (e.g. "00:30") resolves to the same day,
+            # landing before the evening start — roll it to the next day. This is
+            # decided on the *nominal* anchors so the random swing can never flip
+            # the comparison and turn a short window into a 24-hour one.
+            nominal_end += timedelta(days=1)
         start = _jitter(
-            resolve_anchor(clip.start, day, location),
-            jitter,
-            _seed_for(global_seed, day, f"{clip.entity_id}|start"),
+            nominal_start, jitter, _seed_for(global_seed, day, f"{clip.entity_id}|start")
         )
         end = _jitter(
-            resolve_anchor(clip.end, day, location),
-            jitter,
-            _seed_for(global_seed, day, f"{clip.entity_id}|end"),
+            nominal_end, jitter, _seed_for(global_seed, day, f"{clip.entity_id}|end")
         )
         if end <= start:
-            # A fixed end past midnight (e.g. "00:30") resolves to the same day,
-            # landing before the evening start — roll it to the next day.
-            end += timedelta(days=1)
+            # Both edges swung into each other; keep a short, visible window.
+            end = start + timedelta(minutes=5)
         events.append(ScheduledEvent(t=start, entity_id=clip.entity_id, action=ACTION_ON))
         events.append(ScheduledEvent(t=end, entity_id=clip.entity_id, action=ACTION_OFF))
 
