@@ -40,10 +40,12 @@ Implemented:
   tracks, and **create, duplicate, rename or delete whole scenarios**. Deleting
   one cleans up every reference to it (séjour rule, weekday map, painted days)
   and the backend refuses any config that would leave a dangling one.
+- **Away panel on the card** — holiday dates and the séjour rule (single
+  scenario, rotation with ordered blocks, random pick, or per weekday with a
+  fallback), without opening the options form. Admin-only, like every write.
 - **Options UI** — holiday dates, mode, rotation length, jitter, safety-off.
 
-Still to do: an away panel on the card (dates and mode without opening the
-options form), then several séjours. See [VISION.md](VISION.md) and
+Still to do: several séjours. See [VISION.md](VISION.md) and
 [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation

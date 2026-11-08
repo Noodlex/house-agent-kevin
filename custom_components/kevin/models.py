@@ -361,6 +361,15 @@ class KevinConfig:
         `rule.map` et `sejour.overrides`. Supprimer un scénario sans nettoyer
         les quatre est le scénario d'erreur que cette méthode attrape.
         """
+        span = (self.sejour.end_date - self.sejour.start_date).days
+        if span < 0:
+            raise ValueError("la fin du séjour précède son début")
+        if span > 366:
+            # `Sejour.dates()` déroule un jour par jour et le plan est persisté
+            # en entier : une faute de frappe sur l'année produirait un store
+            # énorme pour un séjour qui n'en est plus un.
+            raise ValueError(f"séjour de {span + 1} jours : au-delà d'un an, c'est une faute de frappe")
+
         if not self.mixes:
             raise ValueError("au moins un scénario est requis")
         for key, mix in self.mixes.items():

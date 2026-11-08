@@ -8,7 +8,7 @@ générateur perd bien des jours quand on ne valide pas (c'est ce qui justifie
 le garde-fou).
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -102,6 +102,38 @@ def test_mode_incapable_de_designer_un_scenario(rule):
     config.sejour.overrides = {}
     with pytest.raises(ValueError):
         config.validate()
+
+
+def test_fin_avant_debut():
+    """Saisie inversée dans le panneau absence : `dates()` rendrait [] et le
+    plan serait vide, sans que rien ne le signale."""
+    config = _config()
+    config.sejour.end_date = config.sejour.start_date - timedelta(days=1)
+    with pytest.raises(ValueError, match="précède"):
+        config.validate()
+    assert config.sejour.dates() == []  # ce que le garde-fou évite
+
+
+def test_sejour_d_un_seul_jour_reste_valide():
+    config = _config()
+    config.sejour.end_date = config.sejour.start_date
+    config.sejour.overrides = {}
+    config.validate()
+    assert len(generate_plan(config, PARIS, 7, NOW).days) == 1
+
+
+def test_sejour_delirant_refuse():
+    """Faute de frappe sur l'année : le plan entier est persisté jour par jour."""
+    config = _config()
+    config.sejour.end_date = config.sejour.start_date + timedelta(days=400)
+    with pytest.raises(ValueError, match="faute de frappe"):
+        config.validate()
+
+
+def test_une_annee_pile_passe():
+    config = _config()
+    config.sejour.end_date = config.sejour.start_date + timedelta(days=366)
+    config.validate()  # la borne est inclusive, on ne refuse pas pile un an
 
 
 def test_suppression_proprement_nettoyee_passe():

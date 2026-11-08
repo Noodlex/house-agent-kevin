@@ -76,11 +76,15 @@ async def ws_get_plan(hass: HomeAssistant, connection, msg: dict) -> None:
 
     days = await hass.async_add_executor_job(_build)
 
+    rule = coordinator.config.sejour.rule
     connection.send_result(
         msg["id"],
         {
             "armed": coordinator.armed,
             "sejour": {"start": plan.start_date.isoformat(), "end": plan.end_date.isoformat()},
+            # Le mode voyage avec le plan pour que le bandeau « Absence » de la
+            # carte s'affiche replié sans avoir à charger toute la config.
+            "rule": {"mode": rule.mode, "length": rule.length},
             "safety_off": coordinator.config.safety_off.strftime("%H:%M"),
             "mixes": {mix_id: {"name": mix.name} for mix_id, mix in mixes.items()},
             "days": days,
