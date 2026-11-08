@@ -138,7 +138,8 @@ class KevinCoordinator:
 
     async def async_update_config(self, raw: dict) -> None:
         """Replace the config from the card editor. Raises if `raw` is invalid."""
-        config = KevinConfig.from_dict(raw)  # validation: raises on a bad payload
+        config = KevinConfig.from_dict(raw)  # forme : lève sur une charge invalide
+        config.validate()                    # cohérence : aucune référence pendante
         self.config = config
         await self._save_config()
         if self.armed:

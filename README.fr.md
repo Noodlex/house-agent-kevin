@@ -38,11 +38,18 @@ c'est la prochaine étape). Déjà en place :
 - **Carte Lovelace** (chargée automatiquement) — frise du séjour (colorée par
   mix) + soirée (contour pointillé = fenêtre de swing) sur une **couche de
   transition du soleil**, navigation jour par jour, et un sélecteur de mix par jour.
+- **Édition depuis la carte** — glisser les clips (poignées = début/fin),
+  régler finement un bord dans l'inspecteur, appliquer un modèle d'horaires,
+  ajouter ou retirer des pistes, et **créer, dupliquer, renommer ou supprimer
+  des scénarios entiers**. Une suppression nettoie tout ce qui visait le
+  scénario (règle du séjour, carte hebdomadaire, jours peints), et le backend
+  refuse toute config qui laisserait une référence pendante.
 - **UI d'options** — dates de vacances, mode, longueur de roulement, jitter,
   extinction de sécurité.
 
-Reste à faire : édition par glisser des clips sur la carte, édition des mix depuis
-l'UI, et packaging HACS. Voir [VISION.md](VISION.md) et [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
+Reste à faire : un panneau absence sur la carte (dates et mode sans passer par
+le formulaire d'options), puis plusieurs séjours. Voir [VISION.md](VISION.md) et
+[docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation
 

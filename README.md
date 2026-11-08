@@ -35,10 +35,16 @@ Implemented:
 - **Lovelace card** (auto-loaded) — séjour timeline (colored by mix) + evening
   mix (dashed = swing window) over a **sun transition layer**, day navigation,
   and a day-level mix picker.
+- **Editing from the card** — drag clips (handles = start/end), fine-tune an
+  edge in the inspector, apply a ready-made timing pattern, add or remove
+  tracks, and **create, duplicate, rename or delete whole scenarios**. Deleting
+  one cleans up every reference to it (séjour rule, weekday map, painted days)
+  and the backend refuses any config that would leave a dangling one.
 - **Options UI** — holiday dates, mode, rotation length, jitter, safety-off.
 
-Still to do: drag-to-edit clips on the card, editing mixes from the UI, and HACS
-packaging. See [VISION.md](VISION.md) and [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
+Still to do: an away panel on the card (dates and mode without opening the
+options form), then several séjours. See [VISION.md](VISION.md) and
+[docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation
 

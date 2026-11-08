@@ -1,7 +1,13 @@
-// House Agent Kevin — Lovelace preview card.
-// Read-only previewer: séjour plan (macro) + evening mix (micro) + sun transition
-// layer. Fetches the plan over the WebSocket API (kevin/get_plan). No build step:
-// a plain custom element rendering SVG. Drag-to-edit comes in a later phase.
+// House Agent Kevin — Lovelace card.
+// Deux vues : l'aperçu (séjour macro + soirée micro + couche soleil, lu via
+// kevin/get_plan) et l'édition (clips déplaçables, inspecteur, et le CRUD des
+// scénarios). Pas d'étape de build : un custom element qui écrit du SVG.
+//
+// L'édition travaille sur une copie locale de la config (kevin/get_config) et
+// n'écrit qu'une fois, à l'enregistrement (kevin/update_config). C'est ce qui
+// permet de créer, dupliquer et supprimer des scénarios sans laisser le store
+// dans un état intermédiaire incohérent — et pourquoi le nettoyage des
+// références d'un scénario supprimé se fait ici, pas côté serveur.
 
 const PALETTE = ["#14b8a6", "#8b5cf6", "#f59e0b", "#ec4899", "#3b82f6", "#10b981", "#f43f5e"];
 
@@ -109,7 +115,11 @@ class HouseAgentKevinCard extends HTMLElement {
 
   // ---- edit mode -------------------------------------------------------- //
 
+  /** The scenario being edited: the one picked in the bar, else the day's own. */
   _mixId(day) {
+    if (this._edit && this._config && this._editMix && this._config.mixes[this._editMix]) {
+      return this._editMix;
+    }
     return day.mix;
   }
 
@@ -144,10 +154,161 @@ class HouseAgentKevinCard extends HTMLElement {
     this._config = res.config;
     this._timings = res.timings || [];
     if (this._timingId == null && this._timings.length) this._timingId = this._timings[0].id;
+    const day = this._data.days[this._selected];
+    this._editMix =
+      day && this._config.mixes[day.mix] ? day.mix : Object.keys(this._config.mixes)[0];
     this._edit = true;
     this._dirty = false;
     this._sel = null;
     this._render();
+  }
+
+  // ---- scenario CRUD ---------------------------------------------------- //
+
+  _slugify(name) {
+    return String(name)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "") // « soirée » -> « soiree »
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 40);
+  }
+
+  _uniqueMixId(name) {
+    const mixes = this._config.mixes;
+    const base = this._slugify(name) || "scenario";
+    if (!mixes[base]) return base;
+    for (let n = 2; n < 1000; n++) {
+      if (!mixes[`${base}_${n}`]) return `${base}_${n}`;
+    }
+    return `${base}_${Date.now()}`;
+  }
+
+  /** Everything that points at a scenario — i.e. what deleting it disturbs. */
+  _mixUsage(mixId) {
+    const sejour = this._config.sejour || {};
+    const rule = sejour.rule || {};
+    const overrides = sejour.overrides || {};
+    return {
+      days: (this._data.days || []).filter((d) => d.mix === mixId).length,
+      inList: (rule.mixes || []).includes(mixId),
+      isRuleMix: rule.mix === mixId,
+      weekdays: Object.keys(rule.map || {}).filter((k) => rule.map[k] === mixId),
+      painted: Object.keys(overrides).filter((k) => overrides[k] === mixId),
+    };
+  }
+
+  _switchMix(id, dirty) {
+    this._editMix = id;
+    this._sel = null; // les index de clips appartenaient au scénario précédent
+    if (dirty) this._dirty = true;
+    this._render();
+  }
+
+  _newMix() {
+    const name = (prompt("Nom du nouveau scénario :", "Nouvelle soirée") || "").trim();
+    if (!name) return;
+    const id = this._uniqueMixId(name);
+    const current = this._config.mixes[this._editMix];
+    this._config.mixes[id] = {
+      id,
+      name,
+      jitter_default: current ? current.jitter_default : 20,
+      clips: [],
+      oneshots: [],
+    };
+    this._switchMix(id, true);
+  }
+
+  _duplicateMix() {
+    const src = this._config.mixes[this._editMix];
+    if (!src) return;
+    const name = (prompt("Nom de la copie :", `${src.name} (copie)`) || "").trim();
+    if (!name) return;
+    const id = this._uniqueMixId(name);
+    const copy = JSON.parse(JSON.stringify(src));
+    copy.id = id;
+    copy.name = name;
+    this._config.mixes[id] = copy;
+    this._switchMix(id, true);
+  }
+
+  _renameMix() {
+    const mix = this._config.mixes[this._editMix];
+    if (!mix) return;
+    const name = (prompt("Nouveau nom du scénario :", mix.name) || "").trim();
+    if (!name || name === mix.name) return;
+    // Seul le libellé bouge. L'id est ce que visent la règle du séjour et les
+    // jours peints : le renommer transformerait chaque référence en référence
+    // pendante, et les soirées concernées disparaîtraient du plan sans un mot.
+    mix.name = name;
+    this._dirty = true;
+    this._render();
+  }
+
+  _deleteMix() {
+    const id = this._editMix;
+    const mix = this._config.mixes[id];
+    if (!mix) return;
+    const ids = Object.keys(this._config.mixes);
+    if (ids.length <= 1) {
+      alert("Impossible de supprimer le dernier scénario : le séjour n'aurait plus rien à jouer.");
+      return;
+    }
+    const sejour = this._config.sejour;
+    const rule = sejour.rule || (sejour.rule = {});
+    const overrides = sejour.overrides || (sejour.overrides = {});
+    const fallbackId = ids.find((x) => x !== id);
+    const fallbackName = this._config.mixes[fallbackId].name;
+    const use = this._mixUsage(id);
+
+    // Ce que le nettoyage donnera — calculé avant de toucher à quoi que ce soit,
+    // pour que la confirmation annonce exactement ce qui va se passer.
+    const listAfter = (rule.mixes || []).filter((x) => x !== id);
+    const mapAfter = {};
+    for (const k of Object.keys(rule.map || {})) {
+      if (rule.map[k] !== id) mapAfter[k] = rule.map[k];
+    }
+    const repoints =
+      (rule.mode === "global" && rule.mix === id) ||
+      ((rule.mode === "rotation" || rule.mode === "pool") && !listAfter.length) ||
+      (rule.mode === "weekday" && !Object.keys(mapAfter).length && (!rule.mix || rule.mix === id));
+
+    const lines = [`Supprimer « ${mix.name} » ?`, ""];
+    if (use.days) lines.push(`• ${use.days} soirée(s) du séjour y sont affectées.`);
+    if (use.painted.length) lines.push(`• ${use.painted.length} jour(s) peint(s) à la main repasseront en « Auto ».`);
+    if (use.weekdays.length) lines.push(`• ${use.weekdays.length} jour(s) de la semaine perdront leur association.`);
+    if (use.inList && listAfter.length) lines.push("• Il sortira de la liste de la règle du séjour.");
+    if (repoints) lines.push(`• La règle du séjour sera recalée sur « ${fallbackName} ».`);
+    lines.push("", `Ses ${mix.clips ? mix.clips.length : 0} piste(s) seront perdues.`);
+    if (!confirm(lines.join("\n"))) return;
+
+    delete this._config.mixes[id];
+    rule.mixes = listAfter;
+    rule.map = mapAfter;
+    for (const k of Object.keys(overrides)) {
+      if (overrides[k] === id) delete overrides[k];
+    }
+    // Laisser un mode sans scénario à désigner revient à vider le séjour : on
+    // retombe systématiquement sur un scénario qui existe encore.
+    if (rule.mix === id || (rule.mode === "global" && !rule.mix)) rule.mix = fallbackId;
+    if ((rule.mode === "rotation" || rule.mode === "pool") && !rule.mixes.length) {
+      rule.mixes = [fallbackId];
+    }
+    if (rule.mode === "weekday" && !Object.keys(rule.map).length && !rule.mix) {
+      rule.mix = fallbackId;
+    }
+    this._switchMix(fallbackId, true);
+  }
+
+  _mixOptions() {
+    return Object.keys(this._config.mixes)
+      .map((id) => {
+        const m = this._config.mixes[id];
+        return `<option value="${esc(id)}"${id === this._editMix ? " selected" : ""}>${esc(m.name)}</option>`;
+      })
+      .join("");
   }
 
   // --- per-clip edge/jitter edits (inspector) ---------------------------- //
@@ -203,13 +364,22 @@ class HouseAgentKevinCard extends HTMLElement {
 
   async _exitEdit(save) {
     if (save && this._dirty) {
-      await this._hass.connection.sendMessagePromise({
-        type: "kevin/update_config",
-        config: this._config,
-      });
+      try {
+        await this._hass.connection.sendMessagePromise({
+          type: "kevin/update_config",
+          config: this._config,
+        });
+      } catch (err) {
+        // Le serveur refuse une config incohérente (référence de scénario
+        // pendante) : on reste en édition pour que rien ne soit perdu.
+        alert(`Enregistrement refusé : ${(err && err.message) || err}`);
+        return;
+      }
     }
     this._edit = false;
     this._config = null;
+    this._editMix = null;
+    this._sel = null;
     await this._load();
   }
 
@@ -552,12 +722,15 @@ class HouseAgentKevinCard extends HTMLElement {
   _renderEdit(day) {
     const root = this._root();
     const mixId = this._mixId(day);
-    const mix = this._config.mixes[mixId];
     // Editing a mix propagates to every day the plan assigns to it.
     const affected = this._data.days.filter((d) => d.mix === mixId);
     const n = affected.length;
     const dates = affected.map((d) => `${d.date.slice(8)}/${d.date.slice(5, 7)}`);
     const datesLabel = dates.length > 8 ? dates.slice(0, 8).join(", ") + "…" : dates.join(", ");
+    const dayLabel = `${day.date.slice(8)}/${day.date.slice(5, 7)}`;
+    const affectedHtml = n
+      ? `<div class="affected" title="${esc(dates.join(", "))}">S'applique à ${n} jour${n > 1 ? "s" : ""} du séjour : ${esc(datesLabel)}</div>`
+      : `<div class="unused">Aucun jour du séjour ne joue ce scénario pour l'instant — enregistre, puis affecte-le à une date avec le sélecteur « Mix du … » de l'aperçu.</div>`;
     root.innerHTML = `
       <style>
         ha-card { padding: 12px 14px; }
@@ -566,7 +739,11 @@ class HouseAgentKevinCard extends HTMLElement {
         .btn { cursor:pointer; border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:8px; height:32px; padding:0 12px; font-size:13px; }
         .btn.primary { background:#14b8a6; border-color:#14b8a6; color:#fff; font-weight:600; }
         .affected { font-size:11px; color:#0f766e; margin:4px 0 0; font-weight:600; }
+        .unused { font-size:11px; color:var(--warning-color,#b45309); margin:4px 0 0; font-weight:600; }
         .hint { font-size:11px; color:var(--secondary-text-color); margin:6px 0 4px; }
+        .scen { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
+        .scen select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; min-width:140px; }
+        .scen .sid { font-family:monospace; font-size:10px; opacity:.6; }
         .add { display:flex; align-items:center; gap:10px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .add select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
         .insp { margin-top:10px; border:1px solid var(--divider-color); border-radius:10px; padding:10px 12px; }
@@ -587,18 +764,25 @@ class HouseAgentKevinCard extends HTMLElement {
       </style>
       <ha-card>
         <div class="head">
-          <div class="title">✎ Édition — ${esc(mix ? mix.name : day.mix)}</div>
+          <div class="title">✎ Édition des scénarios</div>
           <div>
             <button class="btn" id="cancel">Annuler</button>
             <button class="btn primary" id="save">Enregistrer</button>
           </div>
         </div>
-        <div class="affected" title="${esc(dates.join(", "))}">
-          S'applique à ${n} jour${n > 1 ? "s" : ""} du séjour${n ? ` : ${esc(datesLabel)}` : ""}
+        <div class="scen">
+          <span>Scénario :</span>
+          <select id="mixsel" title="Choisir le scénario à éditer">${this._mixOptions()}</select>
+          <button class="tbtn" id="mixnew" title="Créer un scénario vide">＋ Nouveau</button>
+          <button class="tbtn" id="mixdup" title="Dupliquer ce scénario avec ses pistes">⧉ Dupliquer</button>
+          <button class="tbtn" id="mixren" title="Renommer (l'identifiant interne ne change pas)">✎ Renommer</button>
+          <button class="tbtn" id="mixdel" title="Supprimer ce scénario">🗑 Supprimer</button>
+          <span class="sid" title="Identifiant interne, visé par la règle et les jours peints">${esc(mixId)}</span>
         </div>
+        ${affectedHtml}
         <div class="hint">
           Glisse un clip pour le déplacer (poignées = début/fin, aimanté à 5 min), ou <b>clique-le</b> pour l'éditer finement.
-          ✕ retire la piste.
+          ✕ retire la piste. Horaires du soleil affichés pour le ${esc(dayLabel)}.
         </div>
         <div id="svgwrap">${this._svgEdit(day)}</div>
         ${this._inspectorHtml(day)}
@@ -611,6 +795,14 @@ class HouseAgentKevinCard extends HTMLElement {
 
     root.getElementById("cancel").onclick = () => this._exitEdit(false);
     root.getElementById("save").onclick = () => this._exitEdit(true);
+
+    const mixSel = root.getElementById("mixsel");
+    mixSel.onchange = () => this._switchMix(mixSel.value, false);
+    root.getElementById("mixnew").onclick = () => this._newMix();
+    root.getElementById("mixdup").onclick = () => this._duplicateMix();
+    root.getElementById("mixren").onclick = () => this._renameMix();
+    root.getElementById("mixdel").onclick = () => this._deleteMix();
+
     this._bindDrag(root, day);
     this._bindInspector(root, day);
     this._appendPicker(root.getElementById("pickwrap"), day);
