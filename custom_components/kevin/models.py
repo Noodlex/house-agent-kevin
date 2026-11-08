@@ -18,6 +18,9 @@ from .const import (
     DEFAULT_SAFETY_OFF,
     ENTITY_ALL,
     MODE_GLOBAL,
+    MODE_POOL,
+    MODE_ROTATION,
+    MODE_WEEKDAY,
     SUN_SUNSET,
 )
 
@@ -344,6 +347,46 @@ class KevinConfig:
         for mix in self.mixes.values():
             ids |= mix.entity_ids()
         return ids
+
+    def validate(self) -> None:
+        """Raise ValueError if this config would silently shorten the séjour.
+
+        Un identifiant de scénario qui n'existe plus ne provoque aucune erreur à
+        la génération : `generate_plan` fait `mixes.get(id)` -> None et saute le
+        jour. Le séjour rétrécit sans un mot, et la carte affiche simplement
+        moins de soirées. On refuse donc ici, au moment de l'écriture, toute
+        référence pendante — c'est le seul endroit où le lien est encore visible.
+
+        Quatre endroits référencent un scénario : `rule.mix`, `rule.mixes`,
+        `rule.map` et `sejour.overrides`. Supprimer un scénario sans nettoyer
+        les quatre est le scénario d'erreur que cette méthode attrape.
+        """
+        if not self.mixes:
+            raise ValueError("au moins un scénario est requis")
+        for key, mix in self.mixes.items():
+            if mix.id != key:
+                raise ValueError(f"le scénario rangé sous « {key} » porte l'id « {mix.id} »")
+
+        known = set(self.mixes)
+        rule = self.sejour.rule
+
+        dangling: set[str] = set()
+        if rule.mix is not None and rule.mix not in known:
+            dangling.add(rule.mix)
+        dangling |= {m for m in rule.mixes if m not in known}
+        dangling |= {m for m in rule.map.values() if m not in known}
+        dangling |= {m for m in self.sejour.overrides.values() if m not in known}
+        if dangling:
+            raise ValueError("scénario(s) inconnu(s) référencé(s) : " + ", ".join(sorted(dangling)))
+
+        # Chaque mode doit pouvoir désigner un scénario, sinon `mix_for_day`
+        # renvoie None et on retombe sur la disparition silencieuse ci-dessus.
+        if rule.mode == MODE_GLOBAL and not rule.mix:
+            raise ValueError("mode « global » : aucun scénario choisi")
+        if rule.mode in (MODE_POOL, MODE_ROTATION) and not rule.mixes and not rule.mix:
+            raise ValueError(f"mode « {rule.mode} » : la liste de scénarios est vide")
+        if rule.mode == MODE_WEEKDAY and not rule.map and not rule.mix:
+            raise ValueError("mode « weekday » : aucun scénario associé à un jour")
 
 
 # --------------------------------------------------------------------------- #
