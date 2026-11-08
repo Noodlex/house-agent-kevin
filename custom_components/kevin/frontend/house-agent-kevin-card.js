@@ -11,6 +11,20 @@
 
 const PALETTE = ["#14b8a6", "#8b5cf6", "#f59e0b", "#ec4899", "#3b82f6", "#10b981", "#f43f5e"];
 
+// Les quatre modes de `rule.mode`, dans l'ordre où on les propose.
+const MODE_LABELS = {
+  global: "un seul scénario",
+  rotation: "roulement",
+  pool: "tirage au sort",
+  weekday: "par jour de semaine",
+};
+
+// Les clés attendues par le générateur (`_WEEKDAY_KEYS`), avec leur libellé.
+const WEEKDAYS = [
+  ["mon", "lun"], ["tue", "mar"], ["wed", "mer"], ["thu", "jeu"],
+  ["fri", "ven"], ["sat", "sam"], ["sun", "dim"],
+];
+
 const SPAN_MIN = 600;            // the 16:00 -> 02:00 window, in minutes
 const START_MIN = 16 * 60;
 const ROW_H = 24;                // px per track row
@@ -309,6 +323,283 @@ class HouseAgentKevinCard extends HTMLElement {
         return `<option value="${esc(id)}"${id === this._editMix ? " selected" : ""}>${esc(m.name)}</option>`;
       })
       .join("");
+  }
+
+  // ---- absence panel ----------------------------------------------------- //
+  // Les dates et la règle du séjour, sans passer par le formulaire d'options.
+  // Le panneau charge la config *vive* à l'ouverture et la réécrit entière à
+  // l'enregistrement : il ne patche que `sejour`, donc il ne peut pas écraser
+  // ce qui a été arrangé dans l'éditeur de scénarios.
+
+  /** Les écritures sont réservées aux admins côté serveur — on cache le reste. */
+  _isAdmin() {
+    const user = this._hass && this._hass.user;
+    return user ? !!user.is_admin : true;
+  }
+
+  _absRule() {
+    const sejour = this._absCfg.sejour;
+    return sejour.rule || (sejour.rule = { mode: "global", mix: null, mixes: [], map: {}, length: 3 });
+  }
+
+  /** Durée en jours, bornes comprises. Midi local : insensible aux heures d'été. */
+  _absSpanDays() {
+    const s = this._absCfg.sejour;
+    const a = new Date(`${s.start_date}T12:00:00`);
+    const b = new Date(`${s.end_date}T12:00:00`);
+    if (isNaN(a) || isNaN(b)) return 0;
+    return Math.round((b - a) / 86400000) + 1;
+  }
+
+  async _toggleAbsence() {
+    if (this._absCfg) {
+      if (this._absDirty && !confirm("Abandonner les modifications de l'absence ?")) return;
+      this._absCfg = null;
+      this._absDirty = false;
+      this._render();
+      return;
+    }
+    try {
+      const res = await this._hass.connection.sendMessagePromise({ type: "kevin/get_config" });
+      this._absCfg = res.config;
+      this._absDirty = false;
+    } catch (err) {
+      this._renderError(err);
+      return;
+    }
+    this._render();
+  }
+
+  _absSetDate(which, value) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    this._absCfg.sejour[which] = value;
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absSetMode(mode) {
+    const rule = this._absRule();
+    const ids = Object.keys(this._absCfg.mixes);
+    rule.mode = mode;
+    // Chaque mode doit pouvoir désigner un scénario, sinon le séjour se vide.
+    // Même règle que le formulaire d'options (preset.apply_options).
+    if ((mode === "rotation" || mode === "pool") && !(rule.mixes || []).length) rule.mixes = ids.slice();
+    if (mode === "global" && !rule.mix) rule.mix = ids[0];
+    if (mode === "weekday" && !Object.keys(rule.map || {}).length && !rule.mix) rule.mix = ids[0];
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absListAdd(id) {
+    if (!id) return;
+    const rule = this._absRule();
+    rule.mixes = (rule.mixes || []).concat([id]);
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absListRemove(i) {
+    const rule = this._absRule();
+    const list = (rule.mixes || []).slice();
+    if (list.length <= 1) {
+      alert("Il faut au moins un scénario dans la liste, sinon le séjour n'a rien à jouer.");
+      return;
+    }
+    list.splice(i, 1);
+    rule.mixes = list;
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absListMove(i, delta) {
+    const rule = this._absRule();
+    const list = (rule.mixes || []).slice();
+    const j = i + delta;
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    rule.mixes = list;
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absSetWeekday(key, id) {
+    const rule = this._absRule();
+    rule.map = rule.map || {};
+    if (id) rule.map[key] = id;
+    else delete rule.map[key];
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absSetRuleMix(id) {
+    this._absRule().mix = id || null;
+    this._absDirty = true;
+    this._render();
+  }
+
+  _absSetLength(value) {
+    this._absRule().length = Math.max(1, Math.min(14, Math.round(+value) || 1));
+    this._absDirty = true;
+    this._render();
+  }
+
+  async _absSave() {
+    try {
+      await this._hass.connection.sendMessagePromise({
+        type: "kevin/update_config",
+        config: this._absCfg,
+      });
+    } catch (err) {
+      // Dates inversées, séjour délirant, liste vide… : on reste ouvert pour
+      // que la saisie en cours ne parte pas à la poubelle.
+      alert(`Enregistrement refusé : ${(err && err.message) || err}`);
+      return;
+    }
+    this._absCfg = null;
+    this._absDirty = false;
+    await this._load();
+  }
+
+  _absMixOptions(selected, placeholder) {
+    const opts = Object.keys(this._absCfg.mixes).map((id) => {
+      const name = this._absCfg.mixes[id].name;
+      return `<option value="${esc(id)}"${id === selected ? " selected" : ""}>${esc(name)}</option>`;
+    });
+    if (placeholder) opts.unshift(`<option value=""${selected ? "" : " selected"}>${esc(placeholder)}</option>`);
+    return opts.join("");
+  }
+
+  _absenceSummary() {
+    const s = this._data.sejour;
+    const n = this._data.days.length;
+    const fmt = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
+    const mode = (this._data.rule && this._data.rule.mode) || "";
+    const label = MODE_LABELS[mode] || mode;
+    return `du ${fmt(s.start)} au ${fmt(s.end)} · ${n} jour${n > 1 ? "s" : ""}${label ? ` · ${label}` : ""}`;
+  }
+
+  _absRuleHtml() {
+    const rule = this._absRule();
+    const mixes = this._absCfg.mixes;
+    if (rule.mode === "global") {
+      return `<div class="absrow"><label>Scénario</label>
+        <select data-abs="rulemix">${this._absMixOptions(rule.mix)}</select></div>`;
+    }
+    if (rule.mode === "rotation" || rule.mode === "pool") {
+      const list = rule.mixes || [];
+      const rows = list
+        .map((id, i) => {
+          const name = mixes[id] ? mixes[id].name : `${id} (inconnu)`;
+          const order = rule.mode === "rotation" ? `<span class="absnum">${i + 1}</span>` : "";
+          const arrows =
+            rule.mode === "rotation"
+              ? `<button class="tbtn" data-abs="up" data-i="${i}" title="Monter"${i === 0 ? " disabled" : ""}>▲</button>` +
+                `<button class="tbtn" data-abs="down" data-i="${i}" title="Descendre"${i === list.length - 1 ? " disabled" : ""}>▼</button>`
+              : "";
+          return `<div class="absitem">${order}<span class="absname">${esc(name)}</span>${arrows}
+            <button class="tbtn" data-abs="rm" data-i="${i}" title="Retirer de la liste">✕</button></div>`;
+        })
+        .join("");
+      const free = Object.keys(mixes).filter((id) => !list.includes(id));
+      const add = free.length
+        ? `<select data-abs="add"><option value="">＋ ajouter un scénario…</option>${free
+            .map((id) => `<option value="${esc(id)}">${esc(mixes[id].name)}</option>`)
+            .join("")}</select>`
+        : `<span class="absnote">Tous les scénarios sont déjà dans la liste.</span>`;
+      const len =
+        rule.mode === "rotation"
+          ? `<div class="absrow"><label>Bloc</label>
+              <input type="number" min="1" max="14" step="1" value="${rule.length || 3}" data-abs="len"> jours par scénario
+              <span class="absnote">${esc(this._rotationPreview())}</span></div>`
+          : `<div class="absrow"><span class="absnote">Un scénario est tiré au sort chaque soir, de façon reproductible.</span></div>`;
+      return `<div class="abslist">${rows}</div><div class="absrow">${add}</div>${len}`;
+    }
+    // weekday
+    const rows = WEEKDAYS.map(
+      ([key, label]) =>
+        `<div class="absday"><span>${label}</span>
+          <select data-abs="wd" data-key="${key}">${this._absMixOptions(rule.map ? rule.map[key] : "", "— repli —")}</select></div>`
+    ).join("");
+    return `<div class="absgrid">${rows}</div>
+      <div class="absrow"><label>Repli</label>
+        <select data-abs="rulemix">${this._absMixOptions(rule.mix)}</select>
+        <span class="absnote">joué les jours laissés sur « repli ».</span></div>`;
+  }
+
+  /** « A A A B B B A… » — ce que le roulement va réellement donner. */
+  _rotationPreview() {
+    const rule = this._absRule();
+    const list = rule.mixes || [];
+    if (!list.length) return "";
+    const block = Math.max(1, rule.length || 1);
+    const letters = list.map((id, i) => String.fromCharCode(65 + i));
+    const span = Math.min(this._absSpanDays(), 12);
+    const out = [];
+    for (let i = 0; i < span; i++) out.push(letters[Math.floor(i / block) % letters.length]);
+    return `${out.join(" ")}${this._absSpanDays() > 12 ? " …" : ""}  (${list
+      .map((id, i) => `${letters[i]} = ${this._absCfg.mixes[id] ? this._absCfg.mixes[id].name : id}`)
+      .join(", ")})`;
+  }
+
+  _absenceHtml() {
+    if (!this._isAdmin()) return "";
+    const open = !!this._absCfg;
+    const head = `<button class="absbtn" id="abstoggle">${open ? "▾" : "▸"} Absence — ${esc(this._absenceSummary())}</button>`;
+    if (!open) return `<div class="abs">${head}</div>`;
+
+    const sejour = this._absCfg.sejour;
+    const rule = this._absRule();
+    const n = this._absSpanDays();
+    const problem =
+      n < 1
+        ? "La fin précède le début."
+        : n > 366
+        ? `${n} jours : au-delà d'un an, c'est probablement une faute de frappe sur l'année.`
+        : "";
+    const stale = Object.keys(sejour.overrides || {}).filter(
+      (d) => d < sejour.start_date || d > sejour.end_date
+    );
+    const modeOpts = Object.keys(MODE_LABELS)
+      .map((m) => `<option value="${m}"${m === rule.mode ? " selected" : ""}>${esc(MODE_LABELS[m])}</option>`)
+      .join("");
+
+    return `<div class="abs">${head}
+      <div class="abspanel">
+        <div class="absrow">
+          <label>Du</label><input type="date" value="${esc(sejour.start_date)}" data-abs="start">
+          <label>au</label><input type="date" value="${esc(sejour.end_date)}" data-abs="end">
+          <span class="${problem ? "absbad" : "absnote"}">${problem ? esc(problem) : `${n} jour${n > 1 ? "s" : ""}`}</span>
+        </div>
+        <div class="absrow"><label>Règle</label><select data-abs="mode">${modeOpts}</select></div>
+        ${this._absRuleHtml()}
+        ${stale.length ? `<div class="absnote">${stale.length} jour(s) peint(s) hors de ces dates sont conservés — ils reprendront effet si tu élargis le séjour.</div>` : ""}
+        <div class="absrow absactions">
+          <button class="btn" data-abs="cancel">Annuler</button>
+          <button class="btn primary" data-abs="save"${problem ? " disabled" : ""}>Enregistrer l'absence</button>
+        </div>
+      </div></div>`;
+  }
+
+  _bindAbsence(root) {
+    const toggle = root.getElementById("abstoggle");
+    if (toggle) toggle.onclick = () => this._toggleAbsence();
+    if (!this._absCfg) return;
+    root.querySelectorAll(".abspanel [data-abs]").forEach((el) => {
+      const act = el.dataset.abs;
+      const i = +el.dataset.i;
+      if (act === "start") el.addEventListener("change", () => this._absSetDate("start_date", el.value));
+      else if (act === "end") el.addEventListener("change", () => this._absSetDate("end_date", el.value));
+      else if (act === "mode") el.addEventListener("change", () => this._absSetMode(el.value));
+      else if (act === "rulemix") el.addEventListener("change", () => this._absSetRuleMix(el.value));
+      else if (act === "len") el.addEventListener("change", () => this._absSetLength(el.value));
+      else if (act === "add") el.addEventListener("change", () => this._absListAdd(el.value));
+      else if (act === "rm") el.addEventListener("click", () => this._absListRemove(i));
+      else if (act === "up") el.addEventListener("click", () => this._absListMove(i, -1));
+      else if (act === "down") el.addEventListener("click", () => this._absListMove(i, 1));
+      else if (act === "wd") el.addEventListener("change", () => this._absSetWeekday(el.dataset.key, el.value));
+      else if (act === "cancel") el.addEventListener("click", () => this._toggleAbsence());
+      else if (act === "save") el.addEventListener("click", () => this._absSave());
+    });
   }
 
   // --- per-clip edge/jitter edits (inspector) ---------------------------- //
@@ -940,6 +1231,9 @@ class HouseAgentKevinCard extends HTMLElement {
     const p = parseLocal(day.date);
     const dateLabel = `${p.date.slice(8)}/${p.date.slice(5, 7)}`;
     const armed = this._data.armed;
+    // Les écritures (peinture d'un jour, édition, absence) sont réservées aux
+    // admins côté serveur : inutile d'offrir des boutons qui échoueront.
+    const admin = this._isAdmin();
     const mixOpts = ['<option value="__auto__">Auto (règle)</option>']
       .concat(Object.keys(this._data.mixes).map((id) => `<option value="${id}">${this._data.mixes[id].name}</option>`))
       .join("");
@@ -959,6 +1253,27 @@ class HouseAgentKevinCard extends HTMLElement {
         .mix { font-size:11px; color:var(--secondary-text-color); }
         .paint { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .paint select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
+        .abs { margin-top:10px; }
+        .absbtn { width:100%; text-align:left; cursor:pointer; border:1px solid var(--divider-color); background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; }
+        .abspanel { border:1px solid var(--divider-color); border-top:none; border-radius:0 0 8px 8px; padding:10px 12px; }
+        .absrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
+        .absrow > label { min-width:52px; }
+        .absrow input, .absrow select, .absitem select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
+        .absrow input[type=number] { width:60px; }
+        .absactions { justify-content:flex-end; margin-top:12px; }
+        .abslist { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+        .absitem { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--primary-text-color); }
+        .absnum { display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; background:var(--secondary-background-color); font-size:10px; font-weight:700; }
+        .absname { flex:1; }
+        .absgrid { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+        .absday { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--secondary-text-color); }
+        .absday select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:2px 4px; font-size:11px; }
+        .absnote { font-size:11px; color:var(--secondary-text-color); }
+        .absbad { font-size:11px; color:var(--error-color,#c0392b); font-weight:600; }
+        .tbtn { cursor:pointer; border:1px solid var(--divider-color); background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:6px; padding:2px 6px; font-size:11px; }
+        .tbtn[disabled] { opacity:.35; cursor:default; }
+        .btn.primary { background:#14b8a6; border-color:#14b8a6; color:#fff; font-weight:600; }
+        .btn[disabled] { opacity:.45; cursor:default; }
         .macro { margin:10px 0; }
         .blocks { display:flex; gap:3px; margin-bottom:3px; }
         .blk { border-radius:5px; padding:3px 4px; font-size:11px; font-weight:600; color:#fff; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -982,10 +1297,11 @@ class HouseAgentKevinCard extends HTMLElement {
             <div class="dsel"><b>${dateLabel}</b><div class="mix">${day.mix_name}</div></div>
             <button id="next">›</button>
             <button class="btn" id="regen" title="Re-tirer les aléas">⟳</button>
-            <button class="btn" id="edit" title="Éditer le mix de ce jour">✎</button>
+            ${admin ? `<button class="btn" id="edit" title="Éditer les scénarios">✎</button>` : ""}
           </div>
         </div>
-        <div class="paint"><i class="mdi mdi-brush"></i>Mix du ${dateLabel} :<select id="mixpick">${mixOpts}</select><span>pinceau</span></div>
+        ${this._absenceHtml()}
+        ${admin ? `<div class="paint"><i class="mdi mdi-brush"></i>Mix du ${dateLabel} :<select id="mixpick">${mixOpts}</select><span>pinceau</span></div>` : ""}
         <div class="macro">${this._macro()}</div>
         ${this._svg(day)}
         <div class="legend">
@@ -1000,22 +1316,28 @@ class HouseAgentKevinCard extends HTMLElement {
     root.getElementById("prev").onclick = () => { this._selected = (this._selected + this._data.days.length - 1) % this._data.days.length; this._render(); };
     root.getElementById("next").onclick = () => { this._selected = (this._selected + 1) % this._data.days.length; this._render(); };
     root.getElementById("regen").onclick = () => this._regenerate();
-    root.getElementById("edit").onclick = () => this._enterEdit();
     root.getElementById("arm").onclick = () => this._toggleArm();
     root.querySelectorAll(".day").forEach((btn) => {
       btn.onclick = () => { this._selected = +btn.dataset.i; this._render(); };
     });
+    this._bindAbsence(root);
+
+    const editBtn = root.getElementById("edit");
+    if (editBtn) editBtn.onclick = () => this._enterEdit();
+
     const pick = root.getElementById("mixpick");
-    pick.value = day.overridden ? day.mix : "__auto__";
-    pick.onchange = async (ev) => {
-      const v = ev.target.value;
-      await this._hass.connection.sendMessagePromise({
-        type: "kevin/set_override",
-        date: day.date,
-        mix: v === "__auto__" ? null : v,
-      });
-      await this._load();
-    };
+    if (pick) {
+      pick.value = day.overridden ? day.mix : "__auto__";
+      pick.onchange = async (ev) => {
+        const v = ev.target.value;
+        await this._hass.connection.sendMessagePromise({
+          type: "kevin/set_override",
+          date: day.date,
+          mix: v === "__auto__" ? null : v,
+        });
+        await this._load();
+      };
+    }
   }
 }
 

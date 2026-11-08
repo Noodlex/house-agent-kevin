@@ -44,11 +44,14 @@ c'est la prochaine étape). Déjà en place :
   des scénarios entiers**. Une suppression nettoie tout ce qui visait le
   scénario (règle du séjour, carte hebdomadaire, jours peints), et le backend
   refuse toute config qui laisserait une référence pendante.
+- **Panneau absence sur la carte** — dates du séjour et règle d'affectation
+  (scénario unique, roulement par blocs ordonnés, tirage au sort, ou par jour de
+  semaine avec un repli), sans ouvrir le formulaire d'options. Réservé aux
+  admins, comme toute écriture.
 - **UI d'options** — dates de vacances, mode, longueur de roulement, jitter,
   extinction de sécurité.
 
-Reste à faire : un panneau absence sur la carte (dates et mode sans passer par
-le formulaire d'options), puis plusieurs séjours. Voir [VISION.md](VISION.md) et
+Reste à faire : plusieurs séjours. Voir [VISION.md](VISION.md) et
 [docs/MVP-PLAN.md](docs/MVP-PLAN.md).
 
 ## Installation
