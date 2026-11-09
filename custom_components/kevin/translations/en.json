@@ -29,7 +29,8 @@
           "mode": "Planning mode",
           "rotation_length": "Rotation block length (days)",
           "jitter": "Swing (± minutes)",
-          "safety_off": "Safety off time"
+          "safety_off": "Safety off time",
+          "show_panel": "Show House Agent Kevin in the sidebar"
         }
       }
     }

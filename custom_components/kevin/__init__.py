@@ -35,6 +35,14 @@ _CARD_FILE = "house-agent-kevin-card.js"
 _CARD_PATH = os.path.join(os.path.dirname(__file__), "frontend", _CARD_FILE)
 _CARD_URL = f"/{DOMAIN}_static/{_CARD_FILE}"
 _FRONTEND_REGISTERED = f"{DOMAIN}_frontend_registered"
+_MODULE_URL = f"{DOMAIN}_module_url"
+
+# Le panneau latéral. Une URL de tableau de bord Lovelace contient forcément un
+# tiret : « kevin » ne peut donc jamais entrer en collision avec un tableau de
+# bord créé par l'utilisateur (même s'il l'a appelé « house-agent-kevin »).
+PANEL_URL = "kevin"
+PANEL_ELEMENT = "house-agent-kevin-panel"
+CONF_SHOW_PANEL = "show_panel"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -60,8 +68,46 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _register_services(hass)
     api.async_register(hass)
     await _register_frontend(hass)
+    if entry.options.get(CONF_SHOW_PANEL, True):
+        await _register_panel(hass)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
+
+
+async def _register_panel(hass: HomeAssistant) -> None:
+    """Give Kevin a home in the sidebar.
+
+    Sans lui, Kevin n'apparaît nulle part après l'installation : il faut savoir
+    créer un tableau de bord et y déposer une carte personnalisée, et un
+    tableau de bord laissé vide n'affiche qu'une page blanche, sur laquelle on
+    ne peut même pas mettre d'aide. Le panneau réutilise la carte telle quelle.
+    """
+    try:
+        from homeassistant.components import panel_custom
+
+        await panel_custom.async_register_panel(
+            hass,
+            frontend_url_path=PANEL_URL,
+            webcomponent_name=PANEL_ELEMENT,
+            sidebar_title="House Agent Kevin",
+            sidebar_icon="mdi:home-account",
+            # Même URL que la carte, version comprise : le navigateur ne charge
+            # le module qu'une fois, qu'on arrive par le panneau ou un tableau.
+            module_url=hass.data[_MODULE_URL],
+            embed_iframe=False,
+            require_admin=False,  # les écritures sont déjà réservées aux admins
+        )
+    except Exception as err:  # noqa: BLE001 — la carte reste utilisable sans
+        _LOGGER.warning("Could not register the Kevin sidebar panel: %s", err)
+
+
+def _remove_panel(hass: HomeAssistant) -> None:
+    try:
+        from homeassistant.components.frontend import async_remove_panel
+
+        async_remove_panel(hass, PANEL_URL)
+    except Exception:  # noqa: BLE001 — absent si l'option était décochée
+        pass
 
 
 async def _register_frontend(hass: HomeAssistant) -> None:
@@ -89,10 +135,11 @@ async def _register_frontend(hass: HomeAssistant) -> None:
     except Exception:  # noqa: BLE001
         pass
 
+    hass.data[_MODULE_URL] = f"{_CARD_URL}?v={version}"
     try:
         from homeassistant.components.frontend import add_extra_js_url
 
-        add_extra_js_url(hass, f"{_CARD_URL}?v={version}")
+        add_extra_js_url(hass, hass.data[_MODULE_URL])
     except Exception as err:  # noqa: BLE001
         _LOGGER.warning("Could not auto-load the Kevin card (%s); add it as a resource manually", err)
 
@@ -102,6 +149,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator: KevinCoordinator | None = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is not None:
         await coordinator.async_disarm()
+    _remove_panel(hass)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
         if not hass.data[DOMAIN]:

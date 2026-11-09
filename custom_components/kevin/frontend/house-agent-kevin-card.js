@@ -123,8 +123,45 @@ class HouseAgentKevinCard extends HTMLElement {
   }
 
   _renderError(err) {
+    if (err && err.code === "not_found") {
+      // La carte est encore en cache mais l'intégration n'est pas (ou plus)
+      // configurée : on dit quoi faire plutôt qu'afficher une erreur brute.
+      this._root().innerHTML = `
+        <ha-card header="House Agent Kevin">
+          <div style="padding:0 16px 16px;line-height:1.5;color:var(--primary-text-color)">
+            Kevin n'est pas encore configuré sur ce Home Assistant.<br>
+            <a href="/config/integrations/dashboard/add?domain=kevin">Ajouter l'intégration House Agent Kevin</a>
+            <span style="color:var(--secondary-text-color)">— ou Paramètres → Appareils et services → Ajouter une intégration.</span>
+          </div>
+        </ha-card>`;
+      return;
+    }
     const msg = err && err.message ? err.message : "House Agent Kevin is not set up yet.";
-    this._root().innerHTML = `<ha-card header="House Agent Kevin"><div style="padding:16px;color:var(--error-color,#c00)">${msg}</div></ha-card>`;
+    this._root().innerHTML = `<ha-card header="House Agent Kevin"><div style="padding:16px;color:var(--error-color,#c00)">${esc(msg)}</div></ha-card>`;
+  }
+
+  /** Vrai tant qu'aucun scénario n'allume quoi que ce soit : Kevin n'a rien à jouer. */
+  _isEmpty() {
+    return !(this._data.days || []).some((d) =>
+      (d.events || []).some((e) => e.action === "on" || e.action === "oneshot")
+    );
+  }
+
+  _onboardingHtml(admin) {
+    if (!this._isEmpty()) return "";
+    if (!admin) {
+      return `<div class="onb"><b>Kevin n'est pas encore configuré.</b>
+        <div>Un administrateur doit d'abord choisir les lumières qu'il simulera.</div></div>`;
+    }
+    return `<div class="onb">
+        <b>Bienvenue — Kevin n'a encore rien à jouer.</b>
+        <ol>
+          <li><b>Choisis les lumières</b> qu'il allumera le soir.
+            <button class="btn primary" id="onbedit">✎ Ajouter mes premières pistes</button></li>
+          <li><b>Vérifie les dates</b> de ton absence dans le bandeau « Absence » ci-dessus.</li>
+          <li><b>Le jour du départ, arme Kevin</b> d'un clic sur la pastille « Désarmé ».</li>
+        </ol>
+      </div>`;
   }
 
   // ---- edit mode -------------------------------------------------------- //
@@ -1253,6 +1290,9 @@ class HouseAgentKevinCard extends HTMLElement {
         .mix { font-size:11px; color:var(--secondary-text-color); }
         .paint { display:flex; align-items:center; gap:8px; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .paint select { border:1px solid var(--divider-color); background:var(--card-background-color); color:var(--primary-text-color); border-radius:6px; padding:3px 6px; font-size:12px; }
+        .onb { margin-top:10px; border:1px solid #14b8a6; background:rgba(20,184,166,.08); border-radius:10px; padding:10px 14px; font-size:13px; color:var(--primary-text-color); }
+        .onb ol { margin:8px 0 0; padding-left:20px; line-height:1.9; }
+        .onb .btn { margin-left:6px; height:28px; }
         .abs { margin-top:10px; }
         .absbtn { width:100%; text-align:left; cursor:pointer; border:1px solid var(--divider-color); background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; }
         .abspanel { border:1px solid var(--divider-color); border-top:none; border-radius:0 0 8px 8px; padding:10px 12px; }
@@ -1301,6 +1341,7 @@ class HouseAgentKevinCard extends HTMLElement {
           </div>
         </div>
         ${this._absenceHtml()}
+        ${this._onboardingHtml(admin)}
         ${admin ? `<div class="paint"><i class="mdi mdi-brush"></i>Mix du ${dateLabel} :<select id="mixpick">${mixOpts}</select><span>pinceau</span></div>` : ""}
         <div class="macro">${this._macro()}</div>
         ${this._svg(day)}
@@ -1324,6 +1365,8 @@ class HouseAgentKevinCard extends HTMLElement {
 
     const editBtn = root.getElementById("edit");
     if (editBtn) editBtn.onclick = () => this._enterEdit();
+    const onbEdit = root.getElementById("onbedit");
+    if (onbEdit) onbEdit.onclick = () => this._enterEdit();
 
     const pick = root.getElementById("mixpick");
     if (pick) {
@@ -1341,11 +1384,63 @@ class HouseAgentKevinCard extends HTMLElement {
   }
 }
 
-customElements.define("house-agent-kevin-card", HouseAgentKevinCard);
+// Le panneau de la barre latérale : une barre d'en-tête (avec le bouton menu
+// sur mobile) et la carte elle-même, en pleine largeur. Home Assistant lui
+// passe `hass`, `narrow` et `panel` comme à tout panneau personnalisé.
+class HouseAgentKevinPanel extends HTMLElement {
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._card) this._build();
+    this._card.hass = hass;
+    if (this._menu) this._menu.hass = hass;
+  }
+
+  set narrow(narrow) {
+    this._narrow = narrow;
+    if (this._menu) this._menu.narrow = narrow;
+  }
+
+  set panel(panel) {
+    this._panel = panel;
+  }
+
+  _build() {
+    const root = this.attachShadow({ mode: "open" });
+    root.innerHTML = `
+      <style>
+        :host { display:block; min-height:100%; background:var(--primary-background-color); }
+        .toolbar { display:flex; align-items:center; gap:4px; height:var(--header-height,56px); padding:0 12px; box-sizing:border-box;
+          background:var(--app-header-background-color, var(--primary-color)); color:var(--app-header-text-color, #fff);
+          border-bottom:var(--app-header-border-bottom, none); font-size:20px; }
+        .wrap { max-width:1100px; margin:0 auto; padding:16px; box-sizing:border-box; }
+        house-agent-kevin-card { display:block; }
+      </style>
+      <div class="toolbar"><span id="menu"></span><span>House Agent Kevin</span></div>
+      <div class="wrap"></div>`;
+    if (customElements.get("ha-menu-button")) {
+      this._menu = document.createElement("ha-menu-button");
+      this._menu.hass = this._hass;
+      this._menu.narrow = this._narrow;
+      root.getElementById("menu").appendChild(this._menu);
+    }
+    this._card = document.createElement("house-agent-kevin-card");
+    this._card.setConfig({});
+    root.querySelector(".wrap").appendChild(this._card);
+  }
+}
+
+if (!customElements.get("house-agent-kevin-card")) {
+  customElements.define("house-agent-kevin-card", HouseAgentKevinCard);
+}
+if (!customElements.get("house-agent-kevin-panel")) {
+  customElements.define("house-agent-kevin-panel", HouseAgentKevinPanel);
+}
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "house-agent-kevin-card",
-  name: "House Agent Kevin",
-  description: "Preview the presence-simulation plan: séjour timeline, evening mix and sun layer.",
-});
+if (!window.customCards.some((c) => c.type === "house-agent-kevin-card")) {
+  window.customCards.push({
+    type: "house-agent-kevin-card",
+    name: "House Agent Kevin",
+    description: "Preview the presence-simulation plan: séjour timeline, evening mix and sun layer.",
+  });
+}
 console.info("%c House Agent Kevin card loaded", "color:#14b8a6");

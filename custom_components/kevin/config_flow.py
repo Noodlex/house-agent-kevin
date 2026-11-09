@@ -105,7 +105,10 @@ class KevinOptionsFlow(OptionsFlow):
             # the form was submitted — even just to change a date.
             # Tracks are added and removed from the card.
             new_config = apply_options(current, user_input)
-            return self.async_create_entry(title="", data={"config": new_config})
+            return self.async_create_entry(
+                title="",
+                data={"config": new_config, "show_panel": bool(user_input.get("show_panel", True))},
+            )
 
         sejour = current.get("sejour", {})
         rule = sejour.get("rule", {})
@@ -121,6 +124,11 @@ class KevinOptionsFlow(OptionsFlow):
                     {"number": {"min": 0, "max": 90, "mode": "box", "unit_of_measurement": "min"}}
                 ),
                 vol.Required("safety_off", default=f"{current.get('safety_off', '01:00')}:00"): selector({"time": {}}),
+                # Le panneau latéral est la porte d'entrée par défaut ; on laisse
+                # le retirer à qui préfère Kevin dans ses propres tableaux de bord.
+                vol.Required("show_panel", default=self._entry.options.get("show_panel", True)): selector(
+                    {"boolean": {}}
+                ),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

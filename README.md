@@ -32,6 +32,8 @@ Implemented:
   disarm. Off by default. See [docs/REGIE.md](docs/REGIE.md).
 - **Sensors** — `sensor.kevin_next_event`, `sensor.kevin_active_mix`.
 - **Services** — `kevin.start`, `kevin.stop`, `kevin.regenerate_schedule`.
+- **Sidebar panel** — Kevin's home, added by the integration, with a guided
+  first run when nothing is arranged yet. Can be hidden from the options.
 - **Lovelace card** (auto-loaded) — séjour timeline (colored by mix) + evening
   mix (dashed = swing window) over a **sun transition layer**, day navigation,
   and a day-level mix picker.
@@ -59,8 +61,11 @@ Still to do: several séjours. See [VISION.md](VISION.md) and
 3. Find **House Agent Kevin** in HACS → **Download**.
 4. **Restart Home Assistant.**
 5. **Settings → Devices & Services → Add Integration → House Agent Kevin.**
-6. Drop a `custom:house-agent-kevin-card` on a dashboard (the card auto-loads —
-   no manual Lovelace resource needed).
+6. Open **House Agent Kevin** in the sidebar: it walks you through the first
+   steps (pick the lights, check the dates, arm). Prefer it in one of your own
+   dashboards? Add the `custom:house-agent-kevin-card` card there (it auto-loads —
+   no manual Lovelace resource needed), and untick *Show House Agent Kevin in
+   the sidebar* in the integration options if you want the panel gone.
 
 ### Manual
 
