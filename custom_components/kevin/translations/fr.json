@@ -29,7 +29,8 @@
           "mode": "Mode de planification",
           "rotation_length": "Longueur d'un bloc de roulement (jours)",
           "jitter": "Swing (± minutes)",
-          "safety_off": "Heure d'extinction de sécurité"
+          "safety_off": "Heure d'extinction de sécurité",
+          "show_panel": "Afficher House Agent Kevin dans la barre latérale"
         }
       }
     }

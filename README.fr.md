@@ -35,6 +35,8 @@ c'est la prochaine étape). Déjà en place :
   restaure tout au désarmement. Désactivée par défaut. Voir [docs/REGIE.md](docs/REGIE.md).
 - **Capteurs** — `sensor.kevin_next_event`, `sensor.kevin_active_mix`.
 - **Services** — `kevin.start`, `kevin.stop`, `kevin.regenerate_schedule`.
+- **Panneau latéral** — la maison de Kevin, ajoutée par l'intégration, avec un
+  premier démarrage guidé tant que rien n'est arrangé. Masquable depuis les options.
 - **Carte Lovelace** (chargée automatiquement) — frise du séjour (colorée par
   mix) + soirée (contour pointillé = fenêtre de swing) sur une **couche de
   transition du soleil**, navigation jour par jour, et un sélecteur de mix par jour.
@@ -65,8 +67,12 @@ Reste à faire : plusieurs séjours. Voir [VISION.md](VISION.md) et
 3. Cherchez **House Agent Kevin** dans HACS → **Télécharger**.
 4. **Redémarrez Home Assistant.**
 5. **Paramètres → Appareils et services → Ajouter l'intégration → House Agent Kevin.**
-6. Déposez une carte `custom:house-agent-kevin-card` sur un tableau de bord (elle
-   se charge toute seule — aucune ressource Lovelace à déclarer).
+6. Ouvrez **House Agent Kevin** dans la barre latérale : il vous guide pour les
+   premières étapes (choisir les lumières, vérifier les dates, armer). Vous le
+   préférez dans un de vos tableaux de bord ? Ajoutez-y la carte
+   `custom:house-agent-kevin-card` (elle se charge toute seule — aucune ressource
+   Lovelace à déclarer), et décochez *Afficher House Agent Kevin dans la barre
+   latérale* dans les options de l'intégration pour retirer le panneau.
 
 ### Manuelle
 

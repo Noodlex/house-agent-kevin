@@ -6,6 +6,8 @@
   ],
   "config_flow": true,
   "dependencies": [
+    "frontend",
+    "panel_custom",
     "sun"
   ],
   "documentation": "https://github.com/Noodlex/house-agent-kevin",
