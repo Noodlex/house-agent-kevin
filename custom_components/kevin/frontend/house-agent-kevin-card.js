@@ -39,6 +39,16 @@ function truncate(s, max) {
   return s.length > max ? s.slice(0, max - 1) + "…" : s;
 }
 
+/** « Aujourd'hui » au format YYYY-MM-DD, en heure LOCALE.
+ *  toISOString() donne la date UTC : entre minuit et 1 h ou 2 h à Paris, elle
+ *  désigne encore la veille. Toute comparaison avec les dates du séjour (qui
+ *  sont des jours locaux) doit passer par ici. */
+function localToday() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function parseLocal(iso) {
   const m = String(iso).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})/);
   if (!m) return { date: "", h: 0, min: 0 };
@@ -95,13 +105,21 @@ class HouseAgentKevinCard extends HTMLElement {
       this._render();
     } catch (err) {
       this._renderError(err);
+      return;
+    }
+    // Un séjour terminé n'a qu'une suite logique : de nouvelles dates. On ouvre
+    // le panneau une seule fois par affichage de la carte — le refermer reste
+    // possible, et un enregistrement ne le rouvrira pas en boucle.
+    if (this._sejourEnded() && this._isAdmin() && !this._edit && !this._absCfg && !this._absAutoOpened) {
+      this._absAutoOpened = true;
+      await this._toggleAbsence();
     }
   }
 
   _defaultIndex() {
     const days = (this._data && this._data.days) || [];
     if (!days.length) return 0;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     const idx = days.findIndex((d) => d.date >= today);
     return idx < 0 ? 0 : idx;
   }
@@ -506,12 +524,21 @@ class HouseAgentKevinCard extends HTMLElement {
     return opts.join("");
   }
 
+  /** Le dernier soir du séjour est derrière nous : armer Kevin ne ferait rien. */
+  _sejourEnded() {
+    return !!(this._data && this._data.sejour && this._data.sejour.end < localToday());
+  }
+
   _absenceSummary() {
     const s = this._data.sejour;
     const n = this._data.days.length;
     const fmt = (iso) => `${iso.slice(8)}/${iso.slice(5, 7)}`;
     const mode = (this._data.rule && this._data.rule.mode) || "";
     const label = MODE_LABELS[mode] || mode;
+    if (this._sejourEnded()) {
+      const armedNote = this._data.armed ? " · Kevin est armé mais n'a plus rien à jouer" : "";
+      return `séjour terminé (du ${fmt(s.start)} au ${fmt(s.end)}) — choisis les dates de ta prochaine absence${armedNote}`;
+    }
     return `du ${fmt(s.start)} au ${fmt(s.end)} · ${n} jour${n > 1 ? "s" : ""}${label ? ` · ${label}` : ""}`;
   }
 
@@ -581,7 +608,8 @@ class HouseAgentKevinCard extends HTMLElement {
   _absenceHtml() {
     if (!this._isAdmin()) return "";
     const open = !!this._absCfg;
-    const head = `<button class="absbtn" id="abstoggle">${open ? "▾" : "▸"} Absence — ${esc(this._absenceSummary())}</button>`;
+    const ended = this._sejourEnded() ? " ended" : "";
+    const head = `<button class="absbtn${ended}" id="abstoggle">${open ? "▾" : "▸"} Absence — ${esc(this._absenceSummary())}</button>`;
     if (!open) return `<div class="abs">${head}</div>`;
 
     const sejour = this._absCfg.sejour;
@@ -1265,8 +1293,10 @@ class HouseAgentKevinCard extends HTMLElement {
       this._renderEdit(day);
       return;
     }
-    const p = parseLocal(day.date);
-    const dateLabel = `${p.date.slice(8)}/${p.date.slice(5, 7)}`;
+    // day.date est une date nue (« 2026-08-30 ») : parseLocal(), qui attend un
+    // horodatage « …THH:MM », la réduisait à une chaîne vide et le libellé
+    // valait « / » depuis la toute première version de la carte.
+    const dateLabel = `${day.date.slice(8)}/${day.date.slice(5, 7)}`;
     const armed = this._data.armed;
     // Les écritures (peinture d'un jour, édition, absence) sont réservées aux
     // admins côté serveur : inutile d'offrir des boutons qui échoueront.
@@ -1295,6 +1325,7 @@ class HouseAgentKevinCard extends HTMLElement {
         .onb .btn { margin-left:6px; height:28px; }
         .abs { margin-top:10px; }
         .absbtn { width:100%; text-align:left; cursor:pointer; border:1px solid var(--divider-color); background:var(--secondary-background-color); color:var(--primary-text-color); border-radius:8px; padding:6px 10px; font-size:12px; font-weight:600; }
+        .absbtn.ended { border-color:var(--warning-color,#b45309); color:var(--warning-color,#b45309); background:rgba(245,158,11,.10); }
         .abspanel { border:1px solid var(--divider-color); border-top:none; border-radius:0 0 8px 8px; padding:10px 12px; }
         .absrow { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; font-size:12px; color:var(--secondary-text-color); }
         .absrow > label { min-width:52px; }
