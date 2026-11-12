@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Hassfest et HACS évoluent avec Home Assistant : un passage hebdomadaire
+    # signale une règle devenue bloquante avant la prochaine PR.
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements_test.txt
+      - run: python -m pytest tests -q
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+      # La carte n'a pas d'étape de build : au moins, qu'elle se parse.
+      - run: node --check custom_components/kevin/frontend/house-agent-kevin-card.js
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration

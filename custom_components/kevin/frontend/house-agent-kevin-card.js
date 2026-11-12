@@ -937,7 +937,12 @@ class HouseAgentKevinCard extends HTMLElement {
       }
     });
     if (!kev.length) {
-      parts.push(`<text x="${this._L}" y="${y0 + 18}" class="tm">Aucune entité pour l'instant — clique ✎ pour en ajouter.</text>`);
+      // Séjour entièrement vide : l'encart d'accueil, juste au-dessus, dit déjà
+      // quoi faire — le répéter ici débordait de la frise en largeur étroite.
+      if (!this._isEmpty()) {
+        const hint = narrow ? "Aucune piste ce soir." : "Aucune piste ce soir — clique ✎ pour en ajouter.";
+        parts.push(`<text x="${this._L}" y="${y0 + 18}" class="tm">${hint}</text>`);
+      }
     } else if (!narrow) {
       parts.push(`<text x="${this._L}" y="${bottom + 22}" class="tm">Bande violette = le coucher tombe ici selon la date du séjour.</text>`);
     }
